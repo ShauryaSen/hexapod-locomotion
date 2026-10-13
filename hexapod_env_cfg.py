@@ -200,6 +200,13 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # only when commanded. Standing scores 0 and symmetric random twitches average 0 (the rl3 ratchet cannot earn it).
     step_reward_scale: float = 0.0
     step_ref_vel: float = 1.0  # [rad/s] coxa speed that earns the full reward
+    # dm1 (DeepMimic-style, 2026-10-13 afternoon). The scripted tripod is used in training only: as a reward target
+    # and for reset states. Nothing scripted reaches the actions.
+    gait_clock_enabled: bool = False  # phase [sin, cos] in the observation and advancing, even with gait_reward_scale = 0
+    rsi_joint_vel: bool = False  # RSI also sets joint velocities = d(reference)/dt, so a started stride carries itself
+    # imitation weight anneal: ref_gait weight x clamp(1 - (env_step - start) / steps, 0, 1); steps = 0 disables
+    ref_gait_anneal_start_steps: int = 0
+    ref_gait_anneal_steps: int = 0
     gait_toe_standing_z_m: float = 0.0078  # measured 2026-10-13 00:50 (diag_gait_clock_smoke.py): toe height in the default stance
 
     # success criteria — episode success_rate = per-env binary check that the *episode-mean*

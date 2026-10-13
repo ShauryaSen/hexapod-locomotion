@@ -25,7 +25,7 @@ class HexapodEnv(DirectRLEnv):
     def __init__(self, cfg: HexapodFlatEnvCfg | HexapodRoughEnvCfg, render_mode: str | None = None, **kwargs):
         # gait clock adds [sin, cos] to the observation (done here because Hydra overrides land after cfg init)
         base_obs = 235 if isinstance(cfg, HexapodRoughEnvCfg) else 66
-        cfg.observation_space = base_obs + (2 if cfg.gait_reward_scale != 0.0 else 0)
+        cfg.observation_space = base_obs + (2 if (cfg.gait_reward_scale != 0.0 or cfg.gait_clock_enabled) else 0)
         super().__init__(cfg, render_mode, **kwargs)
 
         # Joint position command (deviation from default joint positions)
@@ -72,7 +72,7 @@ class HexapodEnv(DirectRLEnv):
         self._feet_ids, _ = self._contact_sensor.find_sensors(".*_tibia")
         self._undesired_contact_body_ids, _ = self._contact_sensor.find_sensors(".*_(coxa|femur)")  # measured: a trained policy sat on its coxas (37 N) and nothing penalized it
         # tripod gait clock (exp4+)
-        self._gait_on = self.cfg.gait_reward_scale != 0.0
+        self._gait_on = self.cfg.gait_reward_scale != 0.0 or self.cfg.gait_clock_enabled
         self._gait_phase = torch.zeros(self.num_envs, device=self.device)
         _, feet_names = self._contact_sensor.find_sensors(".*_tibia")
         tripod_a = ("lf_tibia", "rm_tibia", "lr_tibia")
@@ -154,13 +154,14 @@ class HexapodEnv(DirectRLEnv):
         quat = self._robot.data.root_quat_w.torch.unsqueeze(1).expand(-1, 6, -1)
         return quat_apply_inverse(quat, rel)
 
-    def _ref_joint_delta(self) -> torch.Tensor:
+    def _ref_joint_delta(self, phase: torch.Tensor | None = None) -> torch.Tensor:
         """Scripted tripod joint deltas [rad] for the current clock phase and command, shape (num_envs, num_joints).
 
         Same waveform as diag_gait_openloop.py: in the stance half the coxa sweeps +A -> -A, in the swing half it
         returns -A -> +A while femur/tibia lift with a half-sine. Sweep sign +1 moves the body along -y (Phase 0).
         """
-        ph = torch.remainder((self._gait_phase.unsqueeze(1) + self._ref_leg_offsets) / (2 * math.pi), 1.0)  # (N,6)
+        phase = self._gait_phase if phase is None else phase
+        ph = torch.remainder((phase.unsqueeze(1) + self._ref_leg_offsets) / (2 * math.pi), 1.0)  # (N,6)
         stance = ph < 0.5
         s_st = ph / 0.5
         s_sw = (ph - 0.5) / 0.5
@@ -286,9 +287,13 @@ class HexapodEnv(DirectRLEnv):
         else:
             gait_match = torch.zeros(self.num_envs, device=self.device)
 
+        # dm1: imitation weight anneal
+        self._ref_gait_w = 1.0
+        if self.cfg.ref_gait_anneal_steps > 0:
+            self._ref_gait_w = min(1.0, max(0.0, 1.0 - (self.common_step_counter - self.cfg.ref_gait_anneal_start_steps) / self.cfg.ref_gait_anneal_steps))
         if self.cfg.ref_gait_reward_scale != 0.0 and self._gait_on:
             q_err = self._robot.data.joint_pos.torch - self._robot.data.default_joint_pos.torch - self._ref_joint_delta()
-            ref_gait = torch.exp(-torch.mean(torch.square(q_err), dim=1) / self.cfg.ref_gait_sigma**2)
+            ref_gait = torch.exp(-torch.mean(torch.square(q_err), dim=1) / self.cfg.ref_gait_sigma**2) * self._ref_gait_w
         else:
             ref_gait = torch.zeros(self.num_envs, device=self.device)
         # rl1: linear progress along the command direction, capped at the command magnitude
@@ -405,6 +410,13 @@ class HexapodEnv(DirectRLEnv):
         if self.cfg.rsi_prob > 0.0:
             rsi = (torch.rand(len(env_ids), device=self.device) < self.cfg.rsi_prob).float().unsqueeze(1)
             joint_pos = joint_pos + self._ref_joint_delta()[env_ids] * rsi
+            if self.cfg.rsi_joint_vel:
+                # dm1: joint velocities from a forward difference of the reference along the clock
+                dt_fd = 0.01
+                dphi = 2 * math.pi * dt_fd / self.cfg.gait_period_s
+                d_now = self._ref_joint_delta()[env_ids]
+                d_next = self._ref_joint_delta(self._gait_phase + dphi)[env_ids]
+                joint_vel = joint_vel + (d_next - d_now) / dt_fd * rsi
             default_root_vel[:, :2] += self._commands[env_ids, :2] * rsi
             default_root_vel[:, 5:6] += self._commands[env_ids, 2:3] * rsi
         self._robot.write_root_pose_to_sim_index(root_pose=default_root_pose, env_ids=env_ids)
@@ -445,6 +457,7 @@ class HexapodEnv(DirectRLEnv):
         extras["Metrics/cmd_max_cur"] = self._cmd_max_cur
         extras["Metrics/err_xy_ema"] = self._err_xy_ema
         extras["Metrics/penalty_factor"] = self._penalty_factor
+        extras["Metrics/ref_gait_weight"] = getattr(self, "_ref_gait_w", 1.0)  # dm1
         extras["Metrics/error_vel_yaw"] = mean_error_yaw.mean().item()
         extras["Metrics/root_height"] = (self._root_z_sum[env_ids] / denom).mean().item()
         extras["Metrics/speed_xy"] = (self._speed_xy_sum[env_ids] / denom).mean().item()
