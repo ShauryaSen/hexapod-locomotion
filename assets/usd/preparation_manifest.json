@@ -1,0 +1,34 @@
+{
+  "actuator_validation": "No gains, armature, friction, drive damping or torque-speed/thermal envelope identified or qualified. Effort metadata does not constrain arbitrary applied torques.",
+  "collision_status": "Exact source meshes retained; SDF is an uncooked GPU recipe; no CPU plain-trimesh fallback; no duplicate cap collider.",
+  "files": {
+    "collision_recipe.json": "292242d6498819e5eb0ba44cc98e36fbb508724a841ea842e23c37bf669d2965",
+    "geometry.usdc": "9509881e672e1cb52740f468e9f922ec6b590446739a34be7f02c92c7f527c6d",
+    "geometry_manifest.json": "b672416910035a83fe9f79979c56cebf43b888e41bc04659a17fefc9bc8b85d0",
+    "offline_audit.json": "68cba92eb4cb2154f4aa5635e56dfc1ed6a8ce7a8ec74b9a2faf8608a40e1b5e",
+    "robot.usda": "3be98420adc7923923757d6557d8492d5930f84128c1b1366b9c6db1bb03207c",
+    "source/mesh_mapping.json": "fb697959aadff4e77e6e7d1a5ca806a66a01bfb29e94cddf06b4ff0d883d0705",
+    "source/model.json": "7126935b35398d2a7f03271335a8a1b8f2059354af2b19d9474f22b8e73e4881",
+    "source/source.urdf": "9492fde54c50170e940b49ccb3037d7b413743a5b77bc1d8707a539d44349e78"
+  },
+  "native_PhysxSchema_available": false,
+  "nominal_motor_effort_metadata_nm": 5.5,
+  "nominal_motor_velocity_limit_rad_s": 50.26548245743669,
+  "official_sources": {
+    "adjacent_collision_filter": "https://docs.omniverse.nvidia.com/kit/docs/omni_physics/110.0/dev_guide/guides/articulation_stability_guide.html",
+    "collider_compatibility": "https://docs.omniverse.nvidia.com/kit/docs/omni_physics/latest/dev_guide/rigid_bodies_articulations/collision.html",
+    "joint_velocity_units": "https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/physxschema/class_physx_schema_physx_joint_a_p_i.html",
+    "mass_axes": "https://openusd.org/release/api/class_usd_physics_mass_a_p_i.html",
+    "sdf_schema": "https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/physxschema/class_physx_schema_physx_s_d_f_mesh_collision_a_p_i.html",
+    "sdf_thin_walls": "https://docs.omniverse.nvidia.com/kit/docs/omni_physics/108.0/dev_guide/guides/collision_guide.html"
+  },
+  "omitted_collision_instances": 1600,
+  "pass_offline_audit": true,
+  "selected_collision_instances": 153,
+  "source_hashes": {
+    "mesh_mapping.json": "fb697959aadff4e77e6e7d1a5ca806a66a01bfb29e94cddf06b4ff0d883d0705",
+    "model.json": "7126935b35398d2a7f03271335a8a1b8f2059354af2b19d9474f22b8e73e4881",
+    "source.urdf": "9492fde54c50170e940b49ccb3037d7b413743a5b77bc1d8707a539d44349e78"
+  },
+  "status": "offline prepared, native cooking/physics pending"
+}

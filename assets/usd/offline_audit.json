@@ -1,0 +1,355 @@
+{
+  "checks": {
+    "body_properties": [
+      {
+        "com_error_m": 9.886472890352493e-11,
+        "link": "body",
+        "mass_error_kg": 1.700497986867333e-08,
+        "pass": true,
+        "tensor_error_kg_m2": 1.8436750182093675e-09,
+        "world_frame_max_error": 0.0
+      },
+      {
+        "com_error_m": 8.131728276850048e-10,
+        "link": "lf_coxa",
+        "mass_error_kg": 1.001286720203609e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 2.1930431754434154e-11,
+        "world_frame_max_error": 1.1102230246251565e-16
+      },
+      {
+        "com_error_m": 9.283349297617427e-10,
+        "link": "lf_femur",
+        "mass_error_kg": 5.491198273865905e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 1.2306112238177208e-11,
+        "world_frame_max_error": 2.220446049250313e-16
+      },
+      {
+        "com_error_m": 6.583872197429841e-10,
+        "link": "lf_tibia",
+        "mass_error_kg": 8.023658126798949e-10,
+        "pass": true,
+        "tensor_error_kg_m2": 8.220898571262292e-12,
+        "world_frame_max_error": 3.608224830031759e-16
+      },
+      {
+        "com_error_m": 1.674757103831137e-10,
+        "link": "lm_coxa",
+        "mass_error_kg": 1.001286720203609e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 2.1999743173017894e-11,
+        "world_frame_max_error": 0.0
+      },
+      {
+        "com_error_m": 1.2351130326826443e-09,
+        "link": "lm_femur",
+        "mass_error_kg": 5.491198273865905e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 1.2634362794253923e-11,
+        "world_frame_max_error": 2.223474192036747e-16
+      },
+      {
+        "com_error_m": 6.27784761675354e-10,
+        "link": "lm_tibia",
+        "mass_error_kg": 8.023658126798949e-10,
+        "pass": true,
+        "tensor_error_kg_m2": 8.221644827617614e-12,
+        "world_frame_max_error": 2.2212464953854684e-16
+      },
+      {
+        "com_error_m": 1.6975110553318906e-10,
+        "link": "lr_coxa",
+        "mass_error_kg": 1.001286720203609e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 2.2010865135743685e-11,
+        "world_frame_max_error": 1.1102230246251565e-16
+      },
+      {
+        "com_error_m": 8.923265668037139e-10,
+        "link": "lr_femur",
+        "mass_error_kg": 5.491198273865905e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 1.3060135546812124e-11,
+        "world_frame_max_error": 2.220446049250313e-16
+      },
+      {
+        "com_error_m": 9.196024081115084e-10,
+        "link": "lr_tibia",
+        "mass_error_kg": 8.023658126798949e-10,
+        "pass": true,
+        "tensor_error_kg_m2": 8.220926543678342e-12,
+        "world_frame_max_error": 3.3306690738754696e-16
+      },
+      {
+        "com_error_m": 2.3970088761093855e-10,
+        "link": "rf_coxa",
+        "mass_error_kg": 1.001286720203609e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 2.201421163416928e-11,
+        "world_frame_max_error": 2.220446049250313e-16
+      },
+      {
+        "com_error_m": 4.125015606870619e-11,
+        "link": "rf_femur",
+        "mass_error_kg": 5.491198273865905e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 1.2173237461457487e-11,
+        "world_frame_max_error": 2.220446049250313e-16
+      },
+      {
+        "com_error_m": 1.6270500710624525e-09,
+        "link": "rf_tibia",
+        "mass_error_kg": 8.023658126798949e-10,
+        "pass": true,
+        "tensor_error_kg_m2": 8.221300918688501e-12,
+        "world_frame_max_error": 2.2416684597437696e-16
+      },
+      {
+        "com_error_m": 5.995610882769675e-10,
+        "link": "rm_coxa",
+        "mass_error_kg": 1.001286720203609e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 2.2001714035727038e-11,
+        "world_frame_max_error": 6.938893903907228e-18
+      },
+      {
+        "com_error_m": 1.8213410502010419e-09,
+        "link": "rm_femur",
+        "mass_error_kg": 5.491198273865905e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 1.263670233991182e-11,
+        "world_frame_max_error": 3.3306690738754696e-16
+      },
+      {
+        "com_error_m": 1.4549672092134536e-09,
+        "link": "rm_tibia",
+        "mass_error_kg": 8.023658126798949e-10,
+        "pass": true,
+        "tensor_error_kg_m2": 8.221447611242438e-12,
+        "world_frame_max_error": 3.3306690738754696e-16
+      },
+      {
+        "com_error_m": 2.4593995590072026e-10,
+        "link": "rr_coxa",
+        "mass_error_kg": 1.001286720203609e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 2.2006137797431213e-11,
+        "world_frame_max_error": 2.220446049250313e-16
+      },
+      {
+        "com_error_m": 3.4365219003795744e-10,
+        "link": "rr_femur",
+        "mass_error_kg": 5.491198273865905e-09,
+        "pass": true,
+        "tensor_error_kg_m2": 1.2512498036385683e-11,
+        "world_frame_max_error": 3.3306690738754696e-16
+      },
+      {
+        "com_error_m": 3.4112934699237485e-10,
+        "link": "rr_tibia",
+        "mass_error_kg": 8.023658126798949e-10,
+        "pass": true,
+        "tensor_error_kg_m2": 8.221100503916917e-12,
+        "world_frame_max_error": 2.498001805406602e-16
+      }
+    ],
+    "counts": {
+      "bodies": 19,
+      "collisions": 153,
+      "revolute_joints": 18,
+      "unique_meshes": 59,
+      "visuals": 1753
+    },
+    "dependencies": [
+      "geometry.usdc",
+      "robot.usda"
+    ],
+    "floating_base": true,
+    "foot_geometry_bounds": [
+      {
+        "link": "lf_tibia",
+        "max_z_m": 0.158478818655387,
+        "min_z_m": 0.005000703186053668
+      },
+      {
+        "link": "lm_tibia",
+        "max_z_m": 0.15847809187258896,
+        "min_z_m": 0.005000000000000088
+      },
+      {
+        "link": "lr_tibia",
+        "max_z_m": 0.15847819045030348,
+        "min_z_m": 0.005000071535863071
+      },
+      {
+        "link": "rf_tibia",
+        "max_z_m": 0.1584783414643519,
+        "min_z_m": 0.005000139960079225
+      },
+      {
+        "link": "rm_tibia",
+        "max_z_m": 0.15847812775578377,
+        "min_z_m": 0.005000005252489836
+      },
+      {
+        "link": "rr_tibia",
+        "max_z_m": 0.15847835690202056,
+        "min_z_m": 0.00500030960249237
+      }
+    ],
+    "joint_frames": [
+      {
+        "axis_Z": true,
+        "joint": "lf_coxa_yaw",
+        "limit_error_degrees": 1.8310547034161573e-06,
+        "pass": true,
+        "world_joint_frame_error": 4.262074360106283e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "lf_femur_pitch",
+        "limit_error_degrees": 1.4210854715202004e-14,
+        "pass": true,
+        "world_joint_frame_error": 6.5791309622476035e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "lf_tibia_pitch",
+        "limit_error_degrees": 0.0,
+        "pass": true,
+        "world_joint_frame_error": 8.123499817269675e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "lm_coxa_yaw",
+        "limit_error_degrees": 1.5258788721439487e-07,
+        "pass": true,
+        "world_joint_frame_error": 3.7244723416485215e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "lm_femur_pitch",
+        "limit_error_degrees": 1.4210854715202004e-14,
+        "pass": true,
+        "world_joint_frame_error": 3.1755375702689076e-08
+      },
+      {
+        "axis_Z": true,
+        "joint": "lm_tibia_pitch",
+        "limit_error_degrees": 0.0,
+        "pass": true,
+        "world_joint_frame_error": 8.145370100631766e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "lr_coxa_yaw",
+        "limit_error_degrees": 0.0,
+        "pass": true,
+        "world_joint_frame_error": 6.437599286979179e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "lr_femur_pitch",
+        "limit_error_degrees": 1.4210854715202004e-14,
+        "pass": true,
+        "world_joint_frame_error": 1.0954194884504886e-08
+      },
+      {
+        "axis_Z": true,
+        "joint": "lr_tibia_pitch",
+        "limit_error_degrees": 0.0,
+        "pass": true,
+        "world_joint_frame_error": 8.153010710998387e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "rf_coxa_yaw",
+        "limit_error_degrees": 0.0,
+        "pass": true,
+        "world_joint_frame_error": 6.906677202378475e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "rf_femur_pitch",
+        "limit_error_degrees": 1.4210854715202004e-14,
+        "pass": true,
+        "world_joint_frame_error": 1.306917024601617e-08
+      },
+      {
+        "axis_Z": true,
+        "joint": "rf_tibia_pitch",
+        "limit_error_degrees": 0.0,
+        "pass": true,
+        "world_joint_frame_error": 8.146455676705244e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "rm_coxa_yaw",
+        "limit_error_degrees": 1.5258789431982223e-07,
+        "pass": true,
+        "world_joint_frame_error": 1.3820183469848146e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "rm_femur_pitch",
+        "limit_error_degrees": 1.4210854715202004e-14,
+        "pass": true,
+        "world_joint_frame_error": 3.565057693499796e-08
+      },
+      {
+        "axis_Z": true,
+        "joint": "rm_tibia_pitch",
+        "limit_error_degrees": 0.0,
+        "pass": true,
+        "world_joint_frame_error": 8.146911922857214e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "rr_coxa_yaw",
+        "limit_error_degrees": 1.8310547034161573e-06,
+        "pass": true,
+        "world_joint_frame_error": 4.262074471128585e-09
+      },
+      {
+        "axis_Z": true,
+        "joint": "rr_femur_pitch",
+        "limit_error_degrees": 1.4210854715202004e-14,
+        "pass": true,
+        "world_joint_frame_error": 3.983477703251026e-08
+      },
+      {
+        "axis_Z": true,
+        "joint": "rr_tibia_pitch",
+        "limit_error_degrees": 0.0,
+        "pass": true,
+        "world_joint_frame_error": 8.153613006989247e-09
+      }
+    ],
+    "root_placement_z_m": 0.08161109101311204,
+    "source_geometry_hashes_match": true,
+    "visual_max_transform_error": 5.6040241891430753e-14,
+    "world_visual_bounds_m": [
+      [
+        -0.261868500557079,
+        -0.3298910829886648,
+        0.005000000000000088
+      ],
+      [
+        0.26181761882588556,
+        0.33008449833425396,
+        0.15848236746615996
+      ]
+    ]
+  },
+  "errors": [],
+  "numpy_version": "2.5.2",
+  "openusd_version": [
+    0,
+    26,
+    8
+  ],
+  "pass": true,
+  "qualifies_isaac_runtime": false,
+  "status": "offline prepared, native cooking/physics pending"
+}

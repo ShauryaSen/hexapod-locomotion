@@ -1,0 +1,500 @@
+[
+  {
+    "instances": 18,
+    "mesh": "mesh_000_0001755650_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/0001755650_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_1_as_asm_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_001_0001755652_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/0001755652_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_1_as_asm_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl"
+  },
+  {
+    "instances": 36,
+    "mesh": "mesh_002_0001755652_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/0001755652_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl"
+  },
+  {
+    "approximation": "sdf",
+    "instances": 18,
+    "measured_wall_m": null,
+    "mesh": "mesh_003_1_1_02_eb461_502_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__.stl",
+    "reason": "exposed actuator end housing; interior hardware omitted separately",
+    "resolution": 256,
+    "selected_for_collision": true,
+    "source_mesh": "assets/1_1_02_eb461_502_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "spacing_m": 0.00017968750034924597,
+    "wall_samples": null
+  },
+  {
+    "approximation": "sdf",
+    "instances": 18,
+    "measured_wall_m": null,
+    "mesh": "mesh_004_1_1_06_eb463_507_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__.stl",
+    "reason": "exposed actuator cylindrical housing",
+    "resolution": 256,
+    "selected_for_collision": true,
+    "source_mesh": "assets/1_1_06_eb463_507_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00e7\u00f0\u00b3\u00fd_\u00e0_\u00e9\u00ec1.stl",
+    "spacing_m": 0.00017968750034924597,
+    "wall_samples": null
+  },
+  {
+    "approximation": "sdf",
+    "instances": 18,
+    "measured_wall_m": null,
+    "mesh": "mesh_005_1_1_06_eb463_509_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__.stl",
+    "reason": "exposed actuator end housing",
+    "resolution": 256,
+    "selected_for_collision": true,
+    "source_mesh": "assets/1_1_06_eb463_509_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "spacing_m": 0.00017968750034924597,
+    "wall_samples": null
+  },
+  {
+    "approximation": "sdf",
+    "instances": 18,
+    "measured_wall_m": null,
+    "mesh": "mesh_006_1_1_31_eb463_510_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__.stl",
+    "reason": "exposed actuator end housing",
+    "resolution": 256,
+    "selected_for_collision": true,
+    "source_mesh": "assets/1_1_31_eb463_510_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "spacing_m": 0.00017968750034924597,
+    "wall_samples": null
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_007_1_21_121000022__610001_1_1_00mini_000_asm_1_asm_1_asm_00mini__202.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/1_21_121000022__610001_1_1_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_1_as_asm_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl"
+  },
+  {
+    "instances": 144,
+    "mesh": "mesh_008_1_2_05_000438_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de_____.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/1_2_05_000438_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl"
+  },
+  {
+    "instances": 144,
+    "mesh": "mesh_009_1_2_05_000555_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de_____.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/1_2_05_000555_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl"
+  },
+  {
+    "instances": 72,
+    "mesh": "mesh_010_1_2_05_000608_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de_____.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/1_2_05_000608_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl"
+  },
+  {
+    "instances": 54,
+    "mesh": "mesh_011_1_2_05_020051_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__non.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/1_2_05_020051_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__none.stl"
+  },
+  {
+    "instances": 54,
+    "mesh": "mesh_012_1_2_05_020051_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__non.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/1_2_05_020051_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__none__2.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_013_1_2_16_001425_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de_____.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/1_2_16_001425_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00e7\u00f0\u00b3\u00fd_\u00e0_\u00e9\u00ec2.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_014_6706__300001_1_1_00mini_000_asm_1_asm_1_asm_00mini__20250103_a000.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/6706__300001_1_1_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_1_as_asm_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_015_bearing_insert.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/bearing_insert.stl"
+  },
+  {
+    "approximation": "sdf",
+    "instances": 1,
+    "measured_wall_m": 0.005,
+    "mesh": "mesh_016_bottom_enclosure.stl",
+    "reason": "chassis outer enclosure, measured5mm overall thickness",
+    "resolution": 900,
+    "selected_for_collision": true,
+    "source_mesh": "assets/bottom_enclosure.stl",
+    "spacing_m": 0.000499988231394026,
+    "wall_samples": 10.000235377659614
+  },
+  {
+    "approximation": "sdf",
+    "instances": 1,
+    "measured_wall_m": 0.0016,
+    "mesh": "mesh_017_bottom_plate.stl",
+    "reason": "chassis plate, measured1.6mm plate thickness",
+    "resolution": 900,
+    "selected_for_collision": true,
+    "source_mesh": "assets/bottom_plate.stl",
+    "spacing_m": 0.0003933333357175191,
+    "wall_samples": 4.067796585512586
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_018_cirpattern1_1.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_1.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_019_cirpattern1_10.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_10.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_020_cirpattern1_11.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_11.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_021_cirpattern1_12.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_12.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_022_cirpattern1_2.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_2.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_023_cirpattern1_3.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_3.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_024_cirpattern1_4.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_4.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_025_cirpattern1_5.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_5.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_026_cirpattern1_6.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_6.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_027_cirpattern1_7.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_7.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_028_cirpattern1_8.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_8.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_029_cirpattern1_9.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern1_9.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_030_cirpattern2.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/cirpattern2.stl"
+  },
+  {
+    "approximation": "sdf",
+    "instances": 6,
+    "measured_wall_m": 0.002032,
+    "mesh": "mesh_031_femur_first_stage.stl",
+    "reason": "U bracket, measured2.032mm side walls",
+    "resolution": 320,
+    "selected_for_collision": true,
+    "source_mesh": "assets/femur_first_stage.stl",
+    "spacing_m": 0.0001956250020157313,
+    "wall_samples": 10.387220340253826
+  },
+  {
+    "approximation": "sdf",
+    "instances": 6,
+    "measured_wall_m": 0.0016,
+    "mesh": "mesh_032_first_joint_bottom_plate.stl",
+    "reason": "U bracket and exposed bearing apertures, measured1.6mm wall",
+    "resolution": 512,
+    "selected_for_collision": true,
+    "source_mesh": "assets/first_joint_bottom_plate.stl",
+    "spacing_m": 0.00021089143774588592,
+    "wall_samples": 7.586841917820881
+  },
+  {
+    "approximation": "sdf",
+    "instances": 6,
+    "measured_wall_m": null,
+    "mesh": "mesh_033_first_joint_spacer.stl",
+    "reason": "structural joint spacer",
+    "resolution": 256,
+    "selected_for_collision": true,
+    "source_mesh": "assets/first_joint_spacer.stl",
+    "spacing_m": 0.00019140624908686732,
+    "wall_samples": null
+  },
+  {
+    "approximation": "sdf",
+    "instances": 6,
+    "measured_wall_m": 0.0016,
+    "mesh": "mesh_034_first_joint_top.stl",
+    "reason": "coxa top plate, measured1.6mm plate",
+    "resolution": 512,
+    "selected_for_collision": true,
+    "source_mesh": "assets/first_joint_top.stl",
+    "spacing_m": 0.0002109374945575837,
+    "wall_samples": 7.585185380891196
+  },
+  {
+    "instances": 72,
+    "mesh": "mesh_035_hex_socket_head_countersunk_screw_grade_c_m3x0_5_x_10__1cb4a3dadc.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/hex_socket_head_countersunk_screw_grade_c_m3x0_5_x_10__1cb4a3dadc02821627dad8d7e6578bbe.stl"
+  },
+  {
+    "instances": 36,
+    "mesh": "mesh_036_m3_countersunk_hex_drive_screw__8mm_l__alloy_steel.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/m3_countersunk_hex_drive_screw__8mm_l__alloy_steel.stl"
+  },
+  {
+    "instances": 12,
+    "mesh": "mesh_037_m3_low_profile__socket_head_shoulder_screw__45mm_shoulder_l__4mm_.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/m3_low_profile__socket_head_shoulder_screw__45mm_shoulder_l__4mm_l__18_8_ss.stl"
+  },
+  {
+    "instances": 73,
+    "mesh": "mesh_038_m3_low_profile_socket_head_screw__5mm_l__hs_steel.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/m3_low_profile_socket_head_screw__5mm_l__hs_steel.stl"
+  },
+  {
+    "instances": 96,
+    "mesh": "mesh_039_m3_low_profile_socket_head_screw__6mm_l__18_8_ss.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/m3_low_profile_socket_head_screw__6mm_l__18_8_ss.stl"
+  },
+  {
+    "instances": 144,
+    "mesh": "mesh_040_m3_low_profile_socket_head_screw__8mm_l__18_8_ss.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/m3_low_profile_socket_head_screw__8mm_l__18_8_ss.stl"
+  },
+  {
+    "instances": 60,
+    "mesh": "mesh_041_m4_countersunk_hex_drive_screw__12mm_l__alloy_steel.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/m4_countersunk_hex_drive_screw__12mm_l__alloy_steel.stl"
+  },
+  {
+    "instances": 72,
+    "mesh": "mesh_042_m4_low_profile_socket_head_screw__8mm_l__18_8_ss.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/m4_low_profile_socket_head_screw__8mm_l__18_8_ss.stl"
+  },
+  {
+    "instances": 21,
+    "mesh": "mesh_043_m4_through_hole_standoff__8mm_l__hardened_steel.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/m4_through_hole_standoff__8mm_l__hardened_steel.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_044_mirror1.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/mirror1.stl"
+  },
+  {
+    "approximation": "sdf",
+    "instances": 18,
+    "measured_wall_m": null,
+    "mesh": "mesh_045_motor_bearing_holder.stl",
+    "reason": "exposed bearing support ring; preserve large bore",
+    "resolution": 320,
+    "selected_for_collision": true,
+    "source_mesh": "assets/motor_bearing_holder.stl",
+    "spacing_m": 0.00014375000027939678,
+    "wall_samples": null
+  },
+  {
+    "approximation": "sdf",
+    "instances": 18,
+    "measured_wall_m": null,
+    "mesh": "mesh_046_motor_flange.stl",
+    "reason": "exposed output flange",
+    "resolution": 256,
+    "selected_for_collision": true,
+    "source_mesh": "assets/motor_flange.stl",
+    "spacing_m": 0.00012109374802093953,
+    "wall_samples": null
+  },
+  {
+    "instances": 12,
+    "mesh": "mesh_047_pem_bsos_m3_6____c8b4713a2b299da432156142d6d3e6d8.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/pem_bsos_m3_6____c8b4713a2b299da432156142d6d3e6d8.stl"
+  },
+  {
+    "instances": 48,
+    "mesh": "mesh_048_pem_m4_self_clinching_nut__300_ss.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/pem_m4_self_clinching_nut__300_ss.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_049_revolve1_1.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/revolve1_1.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_050_revolve1_2.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/revolve1_2.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_051_revolve2.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/revolve2.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_052_revolve3_1.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/revolve3_1.stl"
+  },
+  {
+    "instances": 18,
+    "mesh": "mesh_053_revolve3_2.stl",
+    "reason": "Excluded from environment collision: fastener, internal bearing/gear/rotor, or small internal actuator component. Exact visual and assigned mass/inertia are preserved; exposed fastener snag/contact remains an explicit modeling omission.",
+    "selected_for_collision": false,
+    "source_mesh": "assets/revolve3_2.stl"
+  },
+  {
+    "approximation": "sdf",
+    "instances": 4,
+    "measured_wall_m": null,
+    "mesh": "mesh_054_standoff_plate.stl",
+    "reason": "chassis structural standoff plate",
+    "resolution": 640,
+    "selected_for_collision": true,
+    "source_mesh": "assets/standoff_plate.stl",
+    "spacing_m": 0.0002031249925494194,
+    "wall_samples": null
+  },
+  {
+    "approximation": "sdf",
+    "instances": 2,
+    "measured_wall_m": null,
+    "mesh": "mesh_055_standoff_plate__2.stl",
+    "reason": "chassis structural standoff plate",
+    "resolution": 512,
+    "selected_for_collision": true,
+    "source_mesh": "assets/standoff_plate__2.stl",
+    "spacing_m": 0.0001757812569849193,
+    "wall_samples": null
+  },
+  {
+    "approximation": "sdf",
+    "instances": 6,
+    "measured_wall_m": null,
+    "mesh": "mesh_056_tibia.stl",
+    "reason": "entire fork and foot surface; source cap is nonspherical",
+    "resolution": 1024,
+    "selected_for_collision": true,
+    "source_mesh": "assets/tibia.stl",
+    "spacing_m": 0.00014988087787060067,
+    "wall_samples": null
+  },
+  {
+    "approximation": "sdf",
+    "instances": 6,
+    "measured_wall_m": 0.002032,
+    "mesh": "mesh_057_tibia_attatchment_plate.stl",
+    "reason": "U bracket with exposed bearing apertures, measured2.032mm wall",
+    "resolution": 320,
+    "selected_for_collision": true,
+    "source_mesh": "assets/tibia_attatchment_plate.stl",
+    "spacing_m": 0.00016582499956712126,
+    "wall_samples": 12.253882136616584
+  },
+  {
+    "approximation": "sdf",
+    "instances": 1,
+    "measured_wall_m": 0.005,
+    "mesh": "mesh_058_top_enclosure.stl",
+    "reason": "chassis outer enclosure, measured5mm overall thickness",
+    "resolution": 900,
+    "selected_for_collision": true,
+    "source_mesh": "assets/top_enclosure.stl",
+    "spacing_m": 0.000499988231394026,
+    "wall_samples": 10.000235377659614
+  }
+]

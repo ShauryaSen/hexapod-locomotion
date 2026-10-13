@@ -1,0 +1,1418 @@
+[
+  {
+    "bounds_m": [
+      [
+        -0.01600000075995922,
+        -0.01600000075995922,
+        -0.0010999999940395355
+      ],
+      [
+        0.01600000075995922,
+        0.01600000075995922,
+        0.006899999920278788
+      ]
+    ],
+    "bytes": 482484,
+    "mesh": "mesh_000_0001755650_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_.stl",
+    "normal_array_sha256": "1e28b01885aac8e93d814ab7b43388367e4467cf678c209e30e1597b0b2755b8",
+    "prim_path": "/Geometry/mesh_000",
+    "sha256": "65ff49efc97eef3b18018844ea38a02da4407112beb2da089f43edde2ef2b276",
+    "source_mesh": "assets/0001755650_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_1_as_asm_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "0e90c1c823038a87b9381d04e89313edaa656ad5171e95d5a629694d52f2fab2",
+    "triangles": 9648,
+    "vertex_array_sha256": "a2e0ac336755a77f7000fbe6d5fc4f855bee87a9187a1deeb61f0cfc383db7c8",
+    "vertices": 4818
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0020000000949949026,
+        -0.0020000000949949026,
+        -0.0010000000474974513
+      ],
+      [
+        0.0020000000949949026,
+        0.0020000000949949026,
+        0.013000000268220901
+      ]
+    ],
+    "bytes": 279684,
+    "mesh": "mesh_001_0001755652_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_.stl",
+    "normal_array_sha256": "12c149e22cb7051e4fc31a3fa44bf956ecc94251cc19860626c4a17c5f97984d",
+    "prim_path": "/Geometry/mesh_001",
+    "sha256": "b2fbb6b413174cce59b420fe76b85db7f1b6f1f19d49584a30caa9d55f7660aa",
+    "source_mesh": "assets/0001755652_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_1_as_asm_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "45a3411219fca816c8d8cda8a791456740256ce98632741a62ec2c0615a90f20",
+    "triangles": 5592,
+    "vertex_array_sha256": "12585d39debfb49d613c475680fc6ed2961abb7884a36d9e884c586ebc2d34cf",
+    "vertices": 2798
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0020000000949949026,
+        -0.0020000000949949026,
+        -0.0010000000474974513
+      ],
+      [
+        0.0020000000949949026,
+        0.0020000000949949026,
+        0.013000000268220901
+      ]
+    ],
+    "bytes": 279684,
+    "mesh": "mesh_002_0001755652_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_.stl",
+    "normal_array_sha256": "12c149e22cb7051e4fc31a3fa44bf956ecc94251cc19860626c4a17c5f97984d",
+    "prim_path": "/Geometry/mesh_002",
+    "sha256": "b2fbb6b413174cce59b420fe76b85db7f1b6f1f19d49584a30caa9d55f7660aa",
+    "source_mesh": "assets/0001755652_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "45a3411219fca816c8d8cda8a791456740256ce98632741a62ec2c0615a90f20",
+    "triangles": 5592,
+    "vertex_array_sha256": "12585d39debfb49d613c475680fc6ed2961abb7884a36d9e884c586ebc2d34cf",
+    "vertices": 2798
+  },
+  {
+    "bounds_m": [
+      [
+        -0.023000000044703484,
+        -0.023000000044703484,
+        0.0010000000474974513
+      ],
+      [
+        0.023000000044703484,
+        0.023000000044703484,
+        0.009999999776482582
+      ]
+    ],
+    "bytes": 601684,
+    "mesh": "mesh_003_1_1_02_eb461_502_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__.stl",
+    "normal_array_sha256": "d829c82d8c96ff268671ec25b6c90eceec92f623bb2ea17ed19fa426babee009",
+    "prim_path": "/Geometry/mesh_003",
+    "sha256": "15ce5d3d8db9bcd2a520c5dac8180e213b924bfe7f107aeb9aae53adfbd888bf",
+    "source_mesh": "assets/1_1_02_eb461_502_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "3edb02e223ad1ec4cefb2476932ecd3585c13c078946d53c57393c01ccbfef42",
+    "triangles": 12032,
+    "vertex_array_sha256": "6ece0cb937bd29587284b0d9fd7d742de1d4ddd7d80100d292dd74197b6d2c12",
+    "vertices": 5984
+  },
+  {
+    "bounds_m": [
+      [
+        -0.023000000044703484,
+        -0.023000000044703484,
+        -0.011599999852478504
+      ],
+      [
+        0.023000000044703484,
+        0.023000000044703484,
+        0.023499999195337296
+      ]
+    ],
+    "bytes": 477284,
+    "mesh": "mesh_004_1_1_06_eb463_507_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__.stl",
+    "normal_array_sha256": "b11649e4053a9a9458c62a58185dc749629211ace1991502b5e8a79e94d557b8",
+    "prim_path": "/Geometry/mesh_004",
+    "sha256": "0dbae3b3712ea006e322d5b0342078357620521c4004a444bb17255c7ce555bd",
+    "source_mesh": "assets/1_1_06_eb463_507_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00e7\u00f0\u00b3\u00fd_\u00e0_\u00e9\u00ec1.stl",
+    "triangle_index_sha256": "38a37e0fd9fc75b4ad00e5f93577ee69af5904722c8a97dc3ca5c4cfd62d1e25",
+    "triangles": 9544,
+    "vertex_array_sha256": "90edf1aeb3579002c9495e8795b8de9109e691642a9ed5b3c8461abd77156184",
+    "vertices": 4756
+  },
+  {
+    "bounds_m": [
+      [
+        -0.023000000044703484,
+        -0.023000000044703484,
+        0.0
+      ],
+      [
+        0.023000000044703484,
+        0.023000000044703484,
+        0.004699999932199717
+      ]
+    ],
+    "bytes": 512884,
+    "mesh": "mesh_005_1_1_06_eb463_509_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__.stl",
+    "normal_array_sha256": "250111ab1f543827dddd31d850815a2ee6f1c88128e4865f62a394686b3b26d8",
+    "prim_path": "/Geometry/mesh_005",
+    "sha256": "8d0d72ea395b317620564bc018764de28af38a7f632fb0f91c4309b57bbb2c95",
+    "source_mesh": "assets/1_1_06_eb463_509_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "813069fb8784e4b210465a22b733ac0e837a6317f3497afca70dce72562cb9dc",
+    "triangles": 10256,
+    "vertex_array_sha256": "e662097205514bb618d5c3a98213a6480d8e0904953c615c53507fab739f49b4",
+    "vertices": 5114
+  },
+  {
+    "bounds_m": [
+      [
+        -0.023000000044703484,
+        -0.023000000044703484,
+        0.0
+      ],
+      [
+        0.023000000044703484,
+        0.023000000044703484,
+        0.0024999999441206455
+      ]
+    ],
+    "bytes": 441884,
+    "mesh": "mesh_006_1_1_31_eb463_510_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__.stl",
+    "normal_array_sha256": "923418e387db003330881f591170e5fd69464725a45c9bc13ba7544a7aff6689",
+    "prim_path": "/Geometry/mesh_006",
+    "sha256": "bb509ea5df373e1f9294e0dda120b27499e94a6b6cc420a0a9085b9e02a4d069",
+    "source_mesh": "assets/1_1_31_eb463_510_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "346ce99fdc5c5289261277ba3bebcc98c257cb7272dbb31f34a3117745e81b2d",
+    "triangles": 8836,
+    "vertex_array_sha256": "556eabce39550fc66e689bc7210ca14f8cd3ca90b482ff27f76fe006475aedcf",
+    "vertices": 4386
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0020000000949949026,
+        -0.005499999970197678,
+        -0.005499999970197678
+      ],
+      [
+        0.0020000000949949026,
+        0.005499999970197678,
+        0.005499999970197678
+      ]
+    ],
+    "bytes": 4037484,
+    "mesh": "mesh_007_1_21_121000022__610001_1_1_00mini_000_asm_1_asm_1_asm_00mini__202.stl",
+    "normal_array_sha256": "1e74ac0e8c9e73a61150d4ee75519cae3e0d822b91c89f660cea3d199497c6d5",
+    "prim_path": "/Geometry/mesh_007",
+    "sha256": "6b4e18f3b1e7252c47f5049a500df73621ac854fb0a0dc20ad2cf6e8289da94a",
+    "source_mesh": "assets/1_21_121000022__610001_1_1_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_1_as_asm_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "f0bb5f2869517e0dc7d8092e0d7997356dbe158f803cbe0135a4a033b807d20d",
+    "triangles": 80748,
+    "vertex_array_sha256": "34fbf921e0e1cb8832bd08d3d1c800442dbdcf5862034205322560e5d4683042",
+    "vertices": 40350
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0020000000949949026,
+        -0.0019000000320374966,
+        -0.0019000000320374966
+      ],
+      [
+        0.002000001259148121,
+        0.0019000000320374966,
+        0.0019000000320374966
+      ]
+    ],
+    "bytes": 677084,
+    "mesh": "mesh_008_1_2_05_000438_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de_____.stl",
+    "normal_array_sha256": "b88372039d0b2611d7697c662dbba275f786155621a696d0fe5a2901fa378dba",
+    "prim_path": "/Geometry/mesh_008",
+    "sha256": "76baaa1782cfd111b63365c0459f4c382a4ece0f47ca30982986ce8a46ea6736",
+    "source_mesh": "assets/1_2_05_000438_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "9536317e70b68fb509640182ecbf05a049067b71532de1c4dbafce797767ffaa",
+    "triangles": 13540,
+    "vertex_array_sha256": "3f03b0c6407276e078f3df9285c0f9635e0a65b268b449d379ba83e8d6e3ed89",
+    "vertices": 6772
+  },
+  {
+    "bounds_m": [
+      [
+        -0.003000000026077032,
+        -0.0019000000320374966,
+        -0.0019000000320374966
+      ],
+      [
+        0.003000001423060894,
+        0.0019000000320374966,
+        0.0019000000320374966
+      ]
+    ],
+    "bytes": 897684,
+    "mesh": "mesh_009_1_2_05_000555_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de_____.stl",
+    "normal_array_sha256": "0571804dd5324bebf0dead2239ae2dc4db98a8d918eeb4ff08e9c869933a49bd",
+    "prim_path": "/Geometry/mesh_009",
+    "sha256": "a6f88ff94087909c7380970d13a55dd711f23fdd69e8b127d147707726d5816f",
+    "source_mesh": "assets/1_2_05_000555_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "1c9b227e6774c5388c786ef47f4842d971e7dec9e6686217ca34365b523fcd2b",
+    "triangles": 17952,
+    "vertex_array_sha256": "488ec0ee154d4862f587c912545bcbbeaf3a75c94ed303c09b156fdd64c79a0b",
+    "vertices": 8978
+  },
+  {
+    "bounds_m": [
+      [
+        -0.006000000052154064,
+        -0.0023499999660998583,
+        -0.0023499999660998583
+      ],
+      [
+        0.004000335466116667,
+        0.0023499999660998583,
+        0.0023499999660998583
+      ]
+    ],
+    "bytes": 1384184,
+    "mesh": "mesh_010_1_2_05_000608_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de_____.stl",
+    "normal_array_sha256": "92c4460ec3b5fa6921590fed425fdf287a61a5faa87ad2cdb16e44d0277e3470",
+    "prim_path": "/Geometry/mesh_010",
+    "sha256": "7428d2fd077f9f9f57c16bfd3814b069e3e02a7c7e5485ed7d488eba1e748c41",
+    "source_mesh": "assets/1_2_05_000608_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "c758d177764fb06c55a362229fa97951d17b0ad619180fb2c4f56c1a5c06e135",
+    "triangles": 27682,
+    "vertex_array_sha256": "33aceed49401b6e5c1d4a10a8d3bf74d1282da805ef905cb0f6f24b40bb5a268",
+    "vertices": 13843
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0020000000949949026,
+        -0.0020000000949949026,
+        -0.00655160378664732
+      ],
+      [
+        0.0020000000949949026,
+        0.0020000000949949026,
+        0.0
+      ]
+    ],
+    "bytes": 56384,
+    "mesh": "mesh_011_1_2_05_020051_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__non.stl",
+    "normal_array_sha256": "30cd4b82efe2eefa2eef1215d938e13532a3b88f6ab5cc11148741a1fb56bf48",
+    "prim_path": "/Geometry/mesh_011",
+    "sha256": "d6543865ca567612644b4a300cf456b359463b135ad89b0953b38c761d311fd0",
+    "source_mesh": "assets/1_2_05_020051_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__none.stl",
+    "triangle_index_sha256": "8118921796833ec4a2970543e85c24f3f324b0e140fe1b26c448e28ae1bf1ddd",
+    "triangles": 1126,
+    "vertex_array_sha256": "86d209995c19dc819ae40d6b8cd2dacbe1a52a2184aef1af51a1818647fa1d58",
+    "vertices": 565
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0010000000474974513,
+        -0.0009999998146668077,
+        -0.004000000189989805
+      ],
+      [
+        0.0010000000474974513,
+        0.0009999998146668077,
+        0.0
+      ]
+    ],
+    "bytes": 14684,
+    "mesh": "mesh_012_1_2_05_020051_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__non.stl",
+    "normal_array_sha256": "a4b88378540bb17523e04ea54a45b25bf465355f66ddc7ea07bd6e0ba5763887",
+    "prim_path": "/Geometry/mesh_012",
+    "sha256": "1186bee12f86dc569fba008f5d9723e9517a7b16ee196b22855cf7926e2be793",
+    "source_mesh": "assets/1_2_05_020051_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__none__2.stl",
+    "triangle_index_sha256": "5c50cbd96f724ba9cc8595af76ab990db205d3d3f63235b723b95965d07106e4",
+    "triangles": 292,
+    "vertex_array_sha256": "77f5d56c37df9b8c257b733a561e190bf13da6a28eae5b76fbeb838f922118d5",
+    "vertices": 220
+  },
+  {
+    "bounds_m": [
+      [
+        0.0011112404754385352,
+        0.007197999861091375,
+        -0.006770338863134384
+      ],
+      [
+        0.041801996529102325,
+        0.04776366427540779,
+        -9.999979738495313e-06
+      ]
+    ],
+    "bytes": 1068084,
+    "mesh": "mesh_013_1_2_16_001425_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de_____.stl",
+    "normal_array_sha256": "4ddaaede8c61e9f8108b39134538a892859bae5bff0c30d95f713791d94c6fa5",
+    "prim_path": "/Geometry/mesh_013",
+    "sha256": "2be3df7c6312e2fa26620cd97e8bf8495615ac8e7a5813eef419683df1c46986",
+    "source_mesh": "assets/1_2_16_001425_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00e7\u00f0\u00b3\u00fd_\u00e0_\u00e9\u00ec2.stl",
+    "triangle_index_sha256": "603f8835d46ec984222897d35c191279d1d3f0260ae2a95b71ab780bf927a85d",
+    "triangles": 21360,
+    "vertex_array_sha256": "983faf3f4dff08d2068c0b4a82a1662fc1a91680168601f9643d522e68932ead",
+    "vertices": 10638
+  },
+  {
+    "bounds_m": [
+      [
+        -0.01850000023841858,
+        -0.01850000023841858,
+        0.0
+      ],
+      [
+        0.01850000023841858,
+        0.01850000023841858,
+        0.004000000189989805
+      ]
+    ],
+    "bytes": 612084,
+    "mesh": "mesh_014_6706__300001_1_1_00mini_000_asm_1_asm_1_asm_00mini__20250103_a000.stl",
+    "normal_array_sha256": "c3bcb7c16d1bf4d5e420a3fdc95beda53a6454fb7870ab3e841e2edec62dfdca",
+    "prim_path": "/Geometry/mesh_014",
+    "sha256": "cdd0a387fdf3d7227d420110985a9c5369134fe54fa1cd8785ae93753514041b",
+    "source_mesh": "assets/6706__300001_1_1_00mini_000_asm_1_asm_1_asm_00mini__20250103_a0001_asm_1_as_asm_1_1_30_gr_2202_asm_1_asm_1_1_30_gr_2202_asm_fl46blw10_48v_5n_m_de_2__fl46blw10_48v_5n_m_de__\u00ea\u00e4\u00e8\u00eb1.stl",
+    "triangle_index_sha256": "03b642d8123c2781560f01923cb5555ddbd18a5a50a975ef072b735f2bb6a72e",
+    "triangles": 12240,
+    "vertex_array_sha256": "96f6ff27a76cc104315b7b5f629c20439017550b1b7d28002d775bc9e0a46aa0",
+    "vertices": 6120
+  },
+  {
+    "bounds_m": [
+      [
+        -0.01549999974668026,
+        -0.01549999974668026,
+        0.0
+      ],
+      [
+        0.01549999974668026,
+        0.01549999974668026,
+        0.00774999987334013
+      ]
+    ],
+    "bytes": 184984,
+    "mesh": "mesh_015_bearing_insert.stl",
+    "normal_array_sha256": "519f1326f78216b1fb86d508f4251ae1ceea465558a51d92980be78dbf4201db",
+    "prim_path": "/Geometry/mesh_015",
+    "sha256": "45c36d3fddca00476b7cc0bfb40d47e64b19b3db1493f8866bb84ab53d3dfeed",
+    "source_mesh": "assets/bearing_insert.stl",
+    "triangle_index_sha256": "0eb557f3a920b5c5de2d1c4f9fca136d7c4b4825c7c93904e0cdeb939f86474d",
+    "triangles": 3698,
+    "vertex_array_sha256": "25bfbdf39011e1642358bfbd41e46ad6855cd04666b0767e22280995f4932cd4",
+    "vertices": 1837
+  },
+  {
+    "bounds_m": [
+      [
+        -0.14499999582767487,
+        -0.22499825060367584,
+        0.05649999901652336
+      ],
+      [
+        0.14499999582767487,
+        0.22499115765094757,
+        0.061500001698732376
+      ]
+    ],
+    "bytes": 3327484,
+    "mesh": "mesh_016_bottom_enclosure.stl",
+    "normal_array_sha256": "10285fec27b9f4b5134674716c3eaf11917be498eb9264ef66452b0589c285b0",
+    "prim_path": "/Geometry/mesh_016",
+    "sha256": "577f284a02841d5d7b3e52f78b618e26f1d7301e7e361ab8ed6cbc46aedf52dc",
+    "source_mesh": "assets/bottom_enclosure.stl",
+    "triangle_index_sha256": "3d48f0a6d61fe80c653de7e59acd4732999ddf47027b7c8a5eea6f72608af536",
+    "triangles": 66548,
+    "vertex_array_sha256": "d4f1467e4080d492ec3c63b9dc1409e74773fc17294ad795f1b5c5cc4e8c4db1",
+    "vertices": 33178
+  },
+  {
+    "bounds_m": [
+      [
+        -0.09634256362915039,
+        -0.1770000010728836,
+        0.061500001698732376
+      ],
+      [
+        0.09634256362915039,
+        0.1770000010728836,
+        0.06310019642114639
+      ]
+    ],
+    "bytes": 525084,
+    "mesh": "mesh_017_bottom_plate.stl",
+    "normal_array_sha256": "a7b1b50ceb4161a7ee0a4ae1a119e0b63d2d382f21bdf3bf4ae078288bbb5857",
+    "prim_path": "/Geometry/mesh_017",
+    "sha256": "64a57048a0e6f27170df6b0ee275208b8851f769a818b80dea2215fea3171ae5",
+    "source_mesh": "assets/bottom_plate.stl",
+    "triangle_index_sha256": "17b59ec82e525b410d5366d24af43d77a59f695ba890fedf2c87ff0d07468d07",
+    "triangles": 10500,
+    "vertex_array_sha256": "75790636c0a20b083d4202246d7b65133bcd35196e512c6e6bba656c20e7a061",
+    "vertices": 5194
+  },
+  {
+    "bounds_m": [
+      [
+        0.0034220514353364706,
+        0.007944929413497448,
+        -0.0015750000020489097
+      ],
+      [
+        0.00656949682161212,
+        0.01109237503260374,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_018_cirpattern1_1.stl",
+    "normal_array_sha256": "74cdbbd2c24ce4b97f5169b19ec312a1666f294acf451a4c81c3d92b08a2aeb3",
+    "prim_path": "/Geometry/mesh_018",
+    "sha256": "68c053f7bd27e071c5bb0671ebffe2fc708f60bf8f346db2aead961d246aadbf",
+    "source_mesh": "assets/cirpattern1_1.stl",
+    "triangle_index_sha256": "b25f2b04651fe8431aecdf16a2ecf83dbc7cbc36671cb120b7d2c3e23508e735",
+    "triangles": 5040,
+    "vertex_array_sha256": "937bc199bbcf394204bf0aed1878e7eb3805b791d48d5011669cd819601ab2fb",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        -0.01224573329091072,
+        -0.0002783436211757362,
+        -0.0015750000020489097
+      ],
+      [
+        -0.0090975072234869,
+        0.0028698821552097797,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_019_cirpattern1_10.stl",
+    "normal_array_sha256": "8eb6ad8460d9eefd037e93b0eb1c0afde53a3f4590041a31f6f4c1f250d96b3c",
+    "prim_path": "/Geometry/mesh_019",
+    "sha256": "687f9b525bc4264eb94902b4bcce7ca8914c29efe187074f552107684a008590",
+    "source_mesh": "assets/cirpattern1_10.stl",
+    "triangle_index_sha256": "5cd20fd2315d13a3e904a54bb810536eace9e3184b045ba1161f835983455429",
+    "triangles": 5040,
+    "vertex_array_sha256": "da39b983498201b185356548acf35d04b20ba7bbde8caa62ecac3be0fde393d2",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        -0.010422040708363056,
+        0.004531731363385916,
+        -0.0015750000020489097
+      ],
+      [
+        -0.007272112183272839,
+        0.007681660354137421,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_020_cirpattern1_11.stl",
+    "normal_array_sha256": "6c1b1b8dfd71cd16811eb8dfbb7f800ca1a9fd66fa806aebc7081135d6defdb0",
+    "prim_path": "/Geometry/mesh_020",
+    "sha256": "66422b214fa38c89b5eb0589d78438d74aef925e0204931f711d6598c9fe9c95",
+    "source_mesh": "assets/cirpattern1_11.stl",
+    "triangle_index_sha256": "819d4aab82ed2fe3c9d00eacfd5eb4bcb850e13cf0c317434d1d50ee33bd46d9",
+    "triangles": 5040,
+    "vertex_array_sha256": "f6d5fc92f22c8a333874a5136b70bd8a3a4a4e3adcf81b058fcec57a7748f0f1",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        -0.00656949682161212,
+        0.007944929413497448,
+        -0.0015750000020489097
+      ],
+      [
+        -0.0034220514353364706,
+        0.01109237503260374,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_021_cirpattern1_12.stl",
+    "normal_array_sha256": "a7bc1eae502af5c341368d39dd27186b6478ee8270bee2557c3a3ac98c6f41b5",
+    "prim_path": "/Geometry/mesh_021",
+    "sha256": "b5a54b3c38576eaa393af7649f1b93bc5f7e3542ab001ba754650b28562a1c2a",
+    "source_mesh": "assets/cirpattern1_12.stl",
+    "triangle_index_sha256": "a1ef37bf3580432a642674686fbf6dcd42d759910c67a63933b283d30e974423",
+    "triangles": 5040,
+    "vertex_array_sha256": "98ff7b9848d05843b6eefa27bfb2a75299234db545ec8997dbd6a5a823b5481f",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        0.007272112183272839,
+        0.004531731363385916,
+        -0.0015750000020489097
+      ],
+      [
+        0.010422040708363056,
+        0.007681660354137421,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_022_cirpattern1_2.stl",
+    "normal_array_sha256": "629fc89a97458e4c0fae63199b9fc9c77f91705a48c6f6efcb50bc466f793894",
+    "prim_path": "/Geometry/mesh_022",
+    "sha256": "830a95b1632cb708e40b5cb7489e0d12267352040516e634abad18d4e8330df5",
+    "source_mesh": "assets/cirpattern1_2.stl",
+    "triangle_index_sha256": "0b22ced0e12c77ea9b50f3258042bec45e0ce6cf6de9fca15ba0dd46e045c860",
+    "triangles": 5040,
+    "vertex_array_sha256": "43e3901e371d4fdfd97cd388b34242df8d3e72faf295233a15fb32e383d4f5a7",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        0.0090975072234869,
+        -0.0002783436211757362,
+        -0.0015750000020489097
+      ],
+      [
+        0.01224573329091072,
+        0.0028698821552097797,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_023_cirpattern1_3.stl",
+    "normal_array_sha256": "224f9025d4001a1d9ec69b0497e94612c78be200116d67be58c2dca91be19dcc",
+    "prim_path": "/Geometry/mesh_023",
+    "sha256": "ac9634ae0f60e903d15579c0e98ff7bb41184b013269623f573508f1a3d3f2fb",
+    "source_mesh": "assets/cirpattern1_3.stl",
+    "triangle_index_sha256": "8b11527d13c6313c8e5a877164a54394acf3acfa9f7fee25bc1c470d0ee3a2fd",
+    "triangles": 5040,
+    "vertex_array_sha256": "073fd5c99e293de2d764bb542e6f6861025dcc027174b743ab6d65a389467502",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        0.008476566523313522,
+        -0.005386860575526953,
+        -0.0015750000020489097
+      ],
+      [
+        0.011626282706856728,
+        -0.0022371443919837475,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_024_cirpattern1_4.stl",
+    "normal_array_sha256": "ca80051b37cba56ad83a64120975bed01b0698528663fbde43ecd0ea3ec3286e",
+    "prim_path": "/Geometry/mesh_024",
+    "sha256": "68b33c52393b826c1e1933bf7323219699ab97fb36e2778c412968be018f8705",
+    "source_mesh": "assets/cirpattern1_4.stl",
+    "triangle_index_sha256": "d4e1601db90c004867472af310bd6893965f821e85a3b1d6de996091016e29b4",
+    "triangles": 5040,
+    "vertex_array_sha256": "4e72c704004872ca96f462ef8f894cce81ce66de312db9419abde51497a30d06",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        0.0055541363544762135,
+        -0.00962092261761427,
+        -0.0015750000020489097
+      ],
+      [
+        0.008703000843524933,
+        -0.00647205812856555,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_025_cirpattern1_5.stl",
+    "normal_array_sha256": "378a39da4ee5fec4609b51f8e03fb0ac6cb5c6dc073b54cb9ed21c9e57a88fcf",
+    "prim_path": "/Geometry/mesh_025",
+    "sha256": "f6fcc50d9185646aa9feff37a5e4fcdd7293b18333b4ff024f255523691ac0d9",
+    "source_mesh": "assets/cirpattern1_5.stl",
+    "triangle_index_sha256": "740f231405b246143e52e0cc7455c297882bd5c0ef51d837b4727e630c74b3a3",
+    "triangles": 5040,
+    "vertex_array_sha256": "2355b16f31b4f2e17aa6a95796ad14e88a1e2d6c95537f0320dce089f6d95d79",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        0.00099796277936548,
+        -0.012012304738163948,
+        -0.0015750000020489097
+      ],
+      [
+        0.0041473242454230785,
+        -0.008862944319844246,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_026_cirpattern1_6.stl",
+    "normal_array_sha256": "8889db9a443d2e1575879c90c4b414f7120f003a941b95a18b125cab15d921dd",
+    "prim_path": "/Geometry/mesh_026",
+    "sha256": "992ff44896cb30e0e74adc3a40ca0e27b02eba92a94dac9d12a501936817f512",
+    "source_mesh": "assets/cirpattern1_6.stl",
+    "triangle_index_sha256": "61d2a856fab315d3705ac36c376e4893f6d3876b22e5eef88eb48a830e3a7733",
+    "triangles": 5040,
+    "vertex_array_sha256": "b447ba8097065b7dbe28114839be418f01983af34e8a3ccc33224175bf4817f3",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0041473242454230785,
+        -0.012012304738163948,
+        -0.0015750000020489097
+      ],
+      [
+        -0.00099796277936548,
+        -0.008862944319844246,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_027_cirpattern1_7.stl",
+    "normal_array_sha256": "fb01886046777f27f04c48d741d4a5cb34ce094526ba7cbd67f9f1432d7a0ce6",
+    "prim_path": "/Geometry/mesh_027",
+    "sha256": "65cf84b2cb3b4909efca001b9bd1ea5456e2c2f3e1194df7f160dfa469614ace",
+    "source_mesh": "assets/cirpattern1_7.stl",
+    "triangle_index_sha256": "bbb708ea8098ff5b001ad7e0f16323341ba7e9dd6373436d5249e699769dd546",
+    "triangles": 5040,
+    "vertex_array_sha256": "4aa840247a78900d41fd35f3234cf3196ee512c76ee08ed5a3d3546aa9c69876",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        -0.008703000843524933,
+        -0.00962092261761427,
+        -0.0015750000020489097
+      ],
+      [
+        -0.0055541363544762135,
+        -0.00647205812856555,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_028_cirpattern1_8.stl",
+    "normal_array_sha256": "23c7d3afaf149574f10422a2902f2775f7ccdc1c9aa4e94f63e06fe61e25678d",
+    "prim_path": "/Geometry/mesh_028",
+    "sha256": "174d7af35adcb2ce132253595bd951e2f02f3d2381f15a93471830c4103c1c6e",
+    "source_mesh": "assets/cirpattern1_8.stl",
+    "triangle_index_sha256": "faa8f3eac258ee5e25b1dc7a5bfcfccfa599092bb716f973326cae24d6ea26ec",
+    "triangles": 5040,
+    "vertex_array_sha256": "1a60f9de9e10dad3c3e518af78352163b5934c654171e77cf4058d92574b8693",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        -0.011626282706856728,
+        -0.005386860575526953,
+        -0.0015750000020489097
+      ],
+      [
+        -0.008476566523313522,
+        -0.0022371443919837475,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_029_cirpattern1_9.stl",
+    "normal_array_sha256": "df8a3fd6b6bfbefe26f6aa7925c89a216fd73b204cbab8c77211a3dd4df898fb",
+    "prim_path": "/Geometry/mesh_029",
+    "sha256": "63e769487fc819984b911823c12d97e0b47c703fc8541cb2b3ba1f72d1c5c995",
+    "source_mesh": "assets/cirpattern1_9.stl",
+    "triangle_index_sha256": "55479cdd58ea9baf9b25fc6bf2b5e43ccfce2ef5cada8a8b84196c9751f179b2",
+    "triangles": 5040,
+    "vertex_array_sha256": "419ca1f549b64180e1ebb58995d43c65f824ee31547ff10307df135d73a55804",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        -0.011726203374564648,
+        -0.011726203374564648,
+        0.0020405687391757965
+      ],
+      [
+        0.011726203374564648,
+        0.011726203374564648,
+        0.002478515263646841
+      ]
+    ],
+    "bytes": 401084,
+    "mesh": "mesh_030_cirpattern2.stl",
+    "normal_array_sha256": "2b53b87033d576d24787203d2c9f0fffe427f79a844c1bcbc3c9091f45a0b3a2",
+    "prim_path": "/Geometry/mesh_030",
+    "sha256": "c05e482f8a5f8bb0732f031edbd822c8ca9ecec403a65c3bae909f550da8ade6",
+    "source_mesh": "assets/cirpattern2.stl",
+    "triangle_index_sha256": "030d9b77e409639fd6cd4a54e3dc62a45dcd8e3bf4898ef2e9d45ec40f8e1f69",
+    "triangles": 8020,
+    "vertex_array_sha256": "725fccc7dd254a489354521b603e819e8549dc219ec6fa00251057a219cc139d",
+    "vertices": 4010
+  },
+  {
+    "bounds_m": [
+      [
+        -0.01600000075995922,
+        -0.030282000079751015,
+        -0.0015999999595806003
+      ],
+      [
+        0.01600000075995922,
+        0.030282000079751015,
+        0.061000000685453415
+      ]
+    ],
+    "bytes": 269484,
+    "mesh": "mesh_031_femur_first_stage.stl",
+    "normal_array_sha256": "78e2b0aecd43e5bf7f57ffbd320cfa8861baa57313d0d52529b25c89abab5d13",
+    "prim_path": "/Geometry/mesh_031",
+    "sha256": "551308e14c4f0c00f7912e65553232c53539c2fb5a3206854ef1905f9a403601",
+    "source_mesh": "assets/femur_first_stage.stl",
+    "triangle_index_sha256": "59294dec3a78818cd1d748d313b6d5fee556155b0d4a6890d0c24f7e8ec3d43a",
+    "triangles": 5388,
+    "vertex_array_sha256": "454782080e43bbc3da1e806fc8f01b59b95be0726ed500f6b98bff266fbc5ee4",
+    "vertices": 2664
+  },
+  {
+    "bounds_m": [
+      [
+        -0.08299999684095383,
+        -0.026100000366568565,
+        -3.0357660829594124e-18
+      ],
+      [
+        0.024976419284939766,
+        0.026100000366568565,
+        0.050092730671167374
+      ]
+    ],
+    "bytes": 407284,
+    "mesh": "mesh_032_first_joint_bottom_plate.stl",
+    "normal_array_sha256": "7d6dcb920af72b29bd78916cd78fb3cb322ff92a81e5fc12fb4fa7af5a4d7bd5",
+    "prim_path": "/Geometry/mesh_032",
+    "sha256": "e8edaf7744e3d2387bb9eb8cac00e8f2fc2b021e6b28c1b8c28d1b58b2f931f7",
+    "source_mesh": "assets/first_joint_bottom_plate.stl",
+    "triangle_index_sha256": "16134c0e2a782d7a62b36051f2b49f2d250eb0e7435e717c53d68175da0ad040",
+    "triangles": 8144,
+    "vertex_array_sha256": "2696176b9dad16120f82cd4c2cc0bb1d2fe19cef3ce9182d158b87862800b0b8",
+    "vertices": 4032
+  },
+  {
+    "bounds_m": [
+      [
+        -0.08299999684095383,
+        -0.017500000074505806,
+        0.0015999999595806003
+      ],
+      [
+        -0.06400000303983688,
+        0.017500000074505806,
+        0.050599999725818634
+      ]
+    ],
+    "bytes": 75884,
+    "mesh": "mesh_033_first_joint_spacer.stl",
+    "normal_array_sha256": "7c2dd4198f80993d75ad08aa9f3c4c9908c0558aa405566ff7eb8ef2f0a93b7b",
+    "prim_path": "/Geometry/mesh_033",
+    "sha256": "1737efe4087c908611a78e225f5bb33e2d9bd8d6552ad26a1fad28bf06be3819",
+    "source_mesh": "assets/first_joint_spacer.stl",
+    "triangle_index_sha256": "409f1d2605b7bbdddc39632a6b8d74abedbbca3b5edd3ac1046118a713e9fc4a",
+    "triangles": 1516,
+    "vertex_array_sha256": "9658166734f31e8c17f79aef507adfad8a70d8e01fe159be695fc964f21623e5",
+    "vertices": 756
+  },
+  {
+    "bounds_m": [
+      [
+        -0.08299999684095383,
+        -0.024997804313898087,
+        0.050599999725818634
+      ],
+      [
+        0.02500000037252903,
+        0.024997804313898087,
+        0.05220000073313713
+      ]
+    ],
+    "bytes": 210084,
+    "mesh": "mesh_034_first_joint_top.stl",
+    "normal_array_sha256": "334fffb27a06841f729c7eb5cf163f7a07916a3777bc80ba0fdac6a27cf3d8af",
+    "prim_path": "/Geometry/mesh_034",
+    "sha256": "9f188bbebf8b1e265103965c808d8d56055575ac54f9c4ac01102c001e9c5003",
+    "source_mesh": "assets/first_joint_top.stl",
+    "triangle_index_sha256": "c38f3413d49deedaa1c81f3e695d12fc83d5f25351774e18f7ff90ac18a6fe23",
+    "triangles": 4200,
+    "vertex_array_sha256": "70e899279e1df284581aaed4a5ed999694cc00cb73ba4ec7bd412781a607626c",
+    "vertices": 2078
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0027699999045580626,
+        -0.0027699999045580626,
+        -0.009999999776482582
+      ],
+      [
+        0.0027699999045580626,
+        0.0027699999045580626,
+        -8.504210790433175e-19
+      ]
+    ],
+    "bytes": 109284,
+    "mesh": "mesh_035_hex_socket_head_countersunk_screw_grade_c_m3x0_5_x_10__1cb4a3dadc.stl",
+    "normal_array_sha256": "3e754e6f11f4ab77c9cb5976bd49ec70477dfb5eb1c5ed0ed8a261ff72ff70da",
+    "prim_path": "/Geometry/mesh_035",
+    "sha256": "ad9009aea4f6cedf83d68a8b8e0f787dcb53144ba1ead3cc5f1181cd90cca34d",
+    "source_mesh": "assets/hex_socket_head_countersunk_screw_grade_c_m3x0_5_x_10__1cb4a3dadc02821627dad8d7e6578bbe.stl",
+    "triangle_index_sha256": "db390f12564946591cfef66bd5ccd731a6dd17c894e4d3400cae8531d8ccd589",
+    "triangles": 2184,
+    "vertex_array_sha256": "2427ddc7d9b91055b074caee10b595e74ec91f803fedd69a70f7eafd9a87119e",
+    "vertices": 1094
+  },
+  {
+    "bounds_m": [
+      [
+        -0.003000000026077032,
+        -0.003000000026077032,
+        -0.004000000189989805
+      ],
+      [
+        0.003000000026077032,
+        0.003000000026077032,
+        0.004000000189989805
+      ]
+    ],
+    "bytes": 782084,
+    "mesh": "mesh_036_m3_countersunk_hex_drive_screw__8mm_l__alloy_steel.stl",
+    "normal_array_sha256": "082d7a99f88bf393c62985fdb68d02b79b4f9139f9fdf008f87b5de2ad9c5006",
+    "prim_path": "/Geometry/mesh_036",
+    "sha256": "4ca7cdd28a861d966b2e4a666e91eeae07aa570eb7fcad736b5891683e8dbe65",
+    "source_mesh": "assets/m3_countersunk_hex_drive_screw__8mm_l__alloy_steel.stl",
+    "triangle_index_sha256": "735ef8c76ab04b6bd58abf9597db9b0dfc2b1d0bd414fb772a1870b34ce64ed3",
+    "triangles": 15640,
+    "vertex_array_sha256": "01da71501397391efcafa4fa4b75abaac0ed60ea9900b8f6182a7e599b1bfa43",
+    "vertices": 7822
+  },
+  {
+    "bounds_m": [
+      [
+        -0.003000000026077032,
+        -0.003000000026077032,
+        -0.050999999046325684
+      ],
+      [
+        0.003000000026077032,
+        0.003000000026077032,
+        9.43495689721968e-18
+      ]
+    ],
+    "bytes": 1108284,
+    "mesh": "mesh_037_m3_low_profile__socket_head_shoulder_screw__45mm_shoulder_l__4mm_.stl",
+    "normal_array_sha256": "452c1f0de832de132bf29550ef3c105d92d9ec80abd6bb747d8e888273cdd18d",
+    "prim_path": "/Geometry/mesh_037",
+    "sha256": "3c91de171c7854c4d8053fd56dc1a4c19f45c2f12f3e5900894e5649cb68efd3",
+    "source_mesh": "assets/m3_low_profile__socket_head_shoulder_screw__45mm_shoulder_l__4mm_l__18_8_ss.stl",
+    "triangle_index_sha256": "c8f402c576aa3eb50370c4fb21a274d5a8cd0690039b3e858cc95d9f8943b2cd",
+    "triangles": 22164,
+    "vertex_array_sha256": "dc9bf13b04f7317ac5a3978688b4ea8764e242f5bb45380dfa47ddd0f0d0b08e",
+    "vertices": 11084
+  },
+  {
+    "bounds_m": [
+      [
+        -0.002749999985098839,
+        -0.002749999985098839,
+        -0.0035000001080334187
+      ],
+      [
+        0.002749999985098839,
+        0.002749999985098839,
+        0.0035000001080334187
+      ]
+    ],
+    "bytes": 869184,
+    "mesh": "mesh_038_m3_low_profile_socket_head_screw__5mm_l__hs_steel.stl",
+    "normal_array_sha256": "ca52f2dc90348ff46702b96ae987d9fa90571fa3c251cf763265ce0d8eb84906",
+    "prim_path": "/Geometry/mesh_038",
+    "sha256": "bd088c8f570139fc0a0134a4f441800b23711bb9c882aa73b3635b2d7f66ef66",
+    "source_mesh": "assets/m3_low_profile_socket_head_screw__5mm_l__hs_steel.stl",
+    "triangle_index_sha256": "fae74ba4baffbef8ccf4466b1e7e3510e060ede101184ec73a7d957aa7534ee5",
+    "triangles": 17382,
+    "vertex_array_sha256": "8d313744fa4c9528226423dc134dfd984064d489fcfd25621dbe2371552bae07",
+    "vertices": 8693
+  },
+  {
+    "bounds_m": [
+      [
+        -0.002749999985098839,
+        -0.002749999985098839,
+        -0.004000000189989805
+      ],
+      [
+        0.002749999985098839,
+        0.002749999985098839,
+        0.004000000189989805
+      ]
+    ],
+    "bytes": 877384,
+    "mesh": "mesh_039_m3_low_profile_socket_head_screw__6mm_l__18_8_ss.stl",
+    "normal_array_sha256": "b5452c6220fe15025feb08adaab7af8ffde3cb0c18078e9ea1514ec7e001a6d4",
+    "prim_path": "/Geometry/mesh_039",
+    "sha256": "a532f0a42f108a4892206c88027747f6a7808d9e310cf53725ec740e1f437b02",
+    "source_mesh": "assets/m3_low_profile_socket_head_screw__6mm_l__18_8_ss.stl",
+    "triangle_index_sha256": "b3e79c80ccf49938541bf4b1e60e0668855a11d584ce89019f313958f3f54518",
+    "triangles": 17546,
+    "vertex_array_sha256": "f8003d1baca2c453107d2168afe48c0ca40f3dafd1f15aa96b5784b9f0015e2c",
+    "vertices": 8775
+  },
+  {
+    "bounds_m": [
+      [
+        -0.002749999985098839,
+        -0.002749999985098839,
+        -0.004999999888241291
+      ],
+      [
+        0.002749999985098839,
+        0.002749999985098839,
+        0.004999999888241291
+      ]
+    ],
+    "bytes": 1117684,
+    "mesh": "mesh_040_m3_low_profile_socket_head_screw__8mm_l__18_8_ss.stl",
+    "normal_array_sha256": "b44aea1c0ee8b7f5575fc01f55cfe1898e17db6b88eebaea3554e2f85050e6e0",
+    "prim_path": "/Geometry/mesh_040",
+    "sha256": "68a14befa8dab304beab13cdb1980e12b94f2a1c882aefdf747079687f570a3f",
+    "source_mesh": "assets/m3_low_profile_socket_head_screw__8mm_l__18_8_ss.stl",
+    "triangle_index_sha256": "25374f7e8638989a0c5f1940bf3783b8a8a51180e56c0feb676a0569bc086cc6",
+    "triangles": 22352,
+    "vertex_array_sha256": "ec49e54679eb7de9c483ff44a1090c086cd9844628dabcb7ac317d01d442969d",
+    "vertices": 11178
+  },
+  {
+    "bounds_m": [
+      [
+        -0.004000000189989805,
+        -0.004000000189989805,
+        -0.006000000052154064
+      ],
+      [
+        0.004000000189989805,
+        0.004000000189989805,
+        0.006000000052154064
+      ]
+    ],
+    "bytes": 877284,
+    "mesh": "mesh_041_m4_countersunk_hex_drive_screw__12mm_l__alloy_steel.stl",
+    "normal_array_sha256": "944df829dd0e86a6e78ae36032f17ca3a90f691a383f33b79883a40185bbd6b3",
+    "prim_path": "/Geometry/mesh_041",
+    "sha256": "af4173f3e78822da490cd0971e0ac4a2211d72ca943810ec24a28d1e17945622",
+    "source_mesh": "assets/m4_countersunk_hex_drive_screw__12mm_l__alloy_steel.stl",
+    "triangle_index_sha256": "ea4a7312337875fccb49915f5743807dfe543456ef204b2a9e86c4b0d4922c3d",
+    "triangles": 17544,
+    "vertex_array_sha256": "211052c17ded9c403e3dc3d6d82528686e6ae96d2015df6eacc28505052d9976",
+    "vertices": 8774
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0035000001080334187,
+        -0.0035000001080334187,
+        -0.005400000140070915
+      ],
+      [
+        0.0035000001080334187,
+        0.0035000001080334187,
+        0.005400000140070915
+      ]
+    ],
+    "bytes": 811384,
+    "mesh": "mesh_042_m4_low_profile_socket_head_screw__8mm_l__18_8_ss.stl",
+    "normal_array_sha256": "c43e57fc81891f09c829f8f58879918add8d0765625c59021c4725fb6cf41075",
+    "prim_path": "/Geometry/mesh_042",
+    "sha256": "a94924be1256ddf9025ba2a1de4d9f35ac1feed2964b5d7b40d82417b903251d",
+    "source_mesh": "assets/m4_low_profile_socket_head_screw__8mm_l__18_8_ss.stl",
+    "triangle_index_sha256": "2154f8790294e8b25d215abea0f728551e86162287deeb236ce2b05f22c36fb0",
+    "triangles": 16226,
+    "vertex_array_sha256": "c8cddc0659c18458e02455e66ecb3966b1468323b81bea9079a19bf954e82658",
+    "vertices": 8115
+  },
+  {
+    "bounds_m": [
+      [
+        -0.007499999832361937,
+        -0.003949999809265137,
+        -0.004561067093163729
+      ],
+      [
+        0.0005000000237487257,
+        0.003949999809265137,
+        0.004561067093163729
+      ]
+    ],
+    "bytes": 164984,
+    "mesh": "mesh_043_m4_through_hole_standoff__8mm_l__hardened_steel.stl",
+    "normal_array_sha256": "e8fb6063b962f12e44445e51491fae95058132dd59ccff2b4c83b08bc04b9a8b",
+    "prim_path": "/Geometry/mesh_043",
+    "sha256": "6eb33897c1c30291ba1f140c86751bf109ec4c6e133cf26fa510c80115ea189e",
+    "source_mesh": "assets/m4_through_hole_standoff__8mm_l__hardened_steel.stl",
+    "triangle_index_sha256": "2d259f5af49fd310d97cc1ae1b1d45061f20bcaefbfac3a15e4f54d9a0a957d5",
+    "triangles": 3298,
+    "vertex_array_sha256": "7d552b171cdecb2fa79a81b11fdeb50a2cafd68fc527cfba021133f776391185",
+    "vertices": 1653
+  },
+  {
+    "bounds_m": [
+      [
+        -0.011726203374564648,
+        -0.011726203374564648,
+        -0.002478515263646841
+      ],
+      [
+        0.011726203374564648,
+        0.011726203374564648,
+        -0.0020405687391757965
+      ]
+    ],
+    "bytes": 401084,
+    "mesh": "mesh_044_mirror1.stl",
+    "normal_array_sha256": "11ea4f2151f368b582884d711162eefd9a3c89c773ebec86b1cad2d54ef471c8",
+    "prim_path": "/Geometry/mesh_044",
+    "sha256": "6cee806302f3fea851c1fee027157485c7699279611a6492fb402426d9ec240f",
+    "source_mesh": "assets/mirror1.stl",
+    "triangle_index_sha256": "239fbdaaeffd81879f9224121b2e90c345de2298b25ba407a3df8638f6d644c9",
+    "triangles": 8020,
+    "vertex_array_sha256": "2708f702824470a5bfa0b5269ba72a2d03c83bdd36c37c58eb70239245bd595a",
+    "vertices": 4010
+  },
+  {
+    "bounds_m": [
+      [
+        -0.023000000044703484,
+        -0.023000000044703484,
+        0.0
+      ],
+      [
+        0.023000000044703484,
+        0.023000000044703484,
+        0.004999999888241291
+      ]
+    ],
+    "bytes": 207484,
+    "mesh": "mesh_045_motor_bearing_holder.stl",
+    "normal_array_sha256": "4f66fa4ed60000a912c5becb629f11d7292f62d6604da0a7628fed43b31fd888",
+    "prim_path": "/Geometry/mesh_045",
+    "sha256": "9d21a29d2904cdc69469c79c0a3dc988c9257022729379b87b89cb1050bfcd18",
+    "source_mesh": "assets/motor_bearing_holder.stl",
+    "triangle_index_sha256": "7c55fd71e560b4054e821633d68b2e3ac815745af623161d69845316212d26cb",
+    "triangles": 4148,
+    "vertex_array_sha256": "1e8658556e07a1afdf9037bdc4c35c54657a7f405a72b58ab6d601330fe7f784",
+    "vertices": 2058
+  },
+  {
+    "bounds_m": [
+      [
+        -0.01549999974668026,
+        -0.0037499999161809683,
+        -0.01549999974668026
+      ],
+      [
+        0.01549999974668026,
+        0.0,
+        0.01549999974668026
+      ]
+    ],
+    "bytes": 184884,
+    "mesh": "mesh_046_motor_flange.stl",
+    "normal_array_sha256": "75e5427201c5273004bad3b74d5bb8186d0f627f63e19de7ad6dc5e1f5760bec",
+    "prim_path": "/Geometry/mesh_046",
+    "sha256": "0e990e0653a203b559bd031e64e3d1f15ecdb06f383608ca1d9edaffe1e5c08d",
+    "source_mesh": "assets/motor_flange.stl",
+    "triangle_index_sha256": "d95147af62abd2bb7f6757c46c735bae0316eade9f44948a11ae6693a749e574",
+    "triangles": 3696,
+    "vertex_array_sha256": "5c3dfbf46d3714f127f522bddf5f22dfd240b20c2639a200531dd064169038d7",
+    "vertices": 1838
+  },
+  {
+    "bounds_m": [
+      [
+        -0.002400000113993883,
+        -0.0027712814044207335,
+        -0.006000000052154064
+      ],
+      [
+        0.002400000113993883,
+        0.0027712814044207335,
+        2.939152369690196e-19
+      ]
+    ],
+    "bytes": 109184,
+    "mesh": "mesh_047_pem_bsos_m3_6____c8b4713a2b299da432156142d6d3e6d8.stl",
+    "normal_array_sha256": "8bcdf04513baa0faee2c1092d83807db718d57f5e88c62fb0a24a398f1875cb8",
+    "prim_path": "/Geometry/mesh_047",
+    "sha256": "2fa0abafe19db3fc3bd8f409bc9f4387a7ee288100cdd86f3b57128529f1d947",
+    "source_mesh": "assets/pem_bsos_m3_6____c8b4713a2b299da432156142d6d3e6d8.stl",
+    "triangle_index_sha256": "0d825dd502125aa034cf9c5490feb94e14249fec5ca8dfb4b95fc48a4a22aeef",
+    "triangles": 2182,
+    "vertex_array_sha256": "3fc011e95882b75c3d37fdd2f537f578153f2d5497c6359891098b7a2e93fa35",
+    "vertices": 1093
+  },
+  {
+    "bounds_m": [
+      [
+        -4.941449800372607e-19,
+        -0.00393499992787838,
+        -0.00393499992787838
+      ],
+      [
+        0.003379999892786145,
+        0.00393499992787838,
+        0.00393499992787838
+      ]
+    ],
+    "bytes": 157084,
+    "mesh": "mesh_048_pem_m4_self_clinching_nut__300_ss.stl",
+    "normal_array_sha256": "aecbd3e4e03b17fe62ed68dfad6b290e202f5a63b096256e9bc12717d2339147",
+    "prim_path": "/Geometry/mesh_048",
+    "sha256": "13f10e057e04aed43f65b635cb91c307a4fe6be6771aaa7ebbd83f48a3c4e096",
+    "source_mesh": "assets/pem_m4_self_clinching_nut__300_ss.stl",
+    "triangle_index_sha256": "92610c96956595376fa71e6df636d2cdfd70bc6a90d6299f2b6e3a39df840810",
+    "triangles": 3140,
+    "vertex_array_sha256": "bc41b56e96f3625a46d8f415033e65ed64a33f541700903ae7c1a528c1fbfbca",
+    "vertices": 1574
+  },
+  {
+    "bounds_m": [
+      [
+        -0.013000000268220901,
+        -0.013000000268220901,
+        -0.0024999999441206455
+      ],
+      [
+        0.013000000268220901,
+        0.013000000268220901,
+        0.0024999999441206455
+      ]
+    ],
+    "bytes": 180084,
+    "mesh": "mesh_049_revolve1_1.stl",
+    "normal_array_sha256": "235fd96d206712d7170d44c2fe73c6cbe29321f2c4b484498b02fbb0a12ff250",
+    "prim_path": "/Geometry/mesh_049",
+    "sha256": "43926dfae947a6f4e92124ab4fd8739fa53890f0da1fc9753018790ea2a86887",
+    "source_mesh": "assets/revolve1_1.stl",
+    "triangle_index_sha256": "f4a1b80ecf6ccd9a9430f3ae2499d374a3e8053486ef05c7d627677eb6d118fc",
+    "triangles": 3600,
+    "vertex_array_sha256": "d2917848711833055fa052f1493bbed0289314b253430fe02c3c5a3831446cd5",
+    "vertices": 1800
+  },
+  {
+    "bounds_m": [
+      [
+        -0.00938600953668356,
+        -0.00938600953668356,
+        -0.0024999999441206455
+      ],
+      [
+        0.00938600953668356,
+        0.00938600953668356,
+        0.0024999999441206455
+      ]
+    ],
+    "bytes": 151284,
+    "mesh": "mesh_050_revolve1_2.stl",
+    "normal_array_sha256": "cfa4b79561bc5a065943ce78c8e550d6b3e861a5dcd818eac645928d2ba23c36",
+    "prim_path": "/Geometry/mesh_050",
+    "sha256": "9bceb2cd1ff8bd3a9486066fc579c6ad15bc30dd90be932b22e0549b66bff1c9",
+    "source_mesh": "assets/revolve1_2.stl",
+    "triangle_index_sha256": "b5c5a6e559dfd29e53ec4a610686cd0e3afb3c1a9f493ce402a6dd8eb20e164a",
+    "triangles": 3024,
+    "vertex_array_sha256": "47133b4840462bcc2e7d7cf60ccc9dac2d2822379b1397905c6b6cdcf7f65a70",
+    "vertices": 1512
+  },
+  {
+    "bounds_m": [
+      [
+        -0.0015750000020489097,
+        0.00917499978095293,
+        -0.0015750000020489097
+      ],
+      [
+        0.0015750000020489097,
+        0.012325000017881393,
+        0.0015750000020489097
+      ]
+    ],
+    "bytes": 252084,
+    "mesh": "mesh_051_revolve2.stl",
+    "normal_array_sha256": "91a8143513164f78743d49fbdf6997a1c2849af29dff8e14bfdc424e1b2f429b",
+    "prim_path": "/Geometry/mesh_051",
+    "sha256": "1386f9709e57e58c25caf13b918e95cfd5f522502edc9e302c41787a7d36663b",
+    "source_mesh": "assets/revolve2.stl",
+    "triangle_index_sha256": "6495b2cfaf56762d35e76b4dc5292b559fdd91faaa43456eead19d1106c4e185",
+    "triangles": 5040,
+    "vertex_array_sha256": "49fb8549d2f8610d28b6c27b38efaac967ef67d849256140889cc3c49cd6efaf",
+    "vertices": 2522
+  },
+  {
+    "bounds_m": [
+      [
+        -0.011447332799434662,
+        -0.011447332799434662,
+        0.0015750000020489097
+      ],
+      [
+        0.011447332799434662,
+        0.011447332799434662,
+        0.0024116116110235453
+      ]
+    ],
+    "bytes": 50484,
+    "mesh": "mesh_052_revolve3_1.stl",
+    "normal_array_sha256": "ae239493e5ff5a9b71d2df25b2fa3a46fdcba08d644ee0424241b68ad7f34d24",
+    "prim_path": "/Geometry/mesh_052",
+    "sha256": "c743835c1cf2c244a386346ef58434c5937fe756a7c721e58163d6a0cd6efdbb",
+    "source_mesh": "assets/revolve3_1.stl",
+    "triangle_index_sha256": "5363e5a2ec5de17a148e85d5987f698856899811d73687e057e73b39fc4ad3b2",
+    "triangles": 1008,
+    "vertex_array_sha256": "c7ea2751715f125f5ecf87a63e7fe49493f32ad59b5d9d107d115fbd76bf6482",
+    "vertices": 504
+  },
+  {
+    "bounds_m": [
+      [
+        -0.011447332799434662,
+        -0.011447332799434662,
+        -0.0024116116110235453
+      ],
+      [
+        0.011447332799434662,
+        0.011447332799434662,
+        -0.0015750000020489097
+      ]
+    ],
+    "bytes": 50484,
+    "mesh": "mesh_053_revolve3_2.stl",
+    "normal_array_sha256": "fc19dfc71c81adbc5f5d8a871af78fc3df46179e25bb28ea6fb6af54d5bbbade",
+    "prim_path": "/Geometry/mesh_053",
+    "sha256": "be8b73b04f231277e33f61ebdb11f1d26aec0bf77f48a1d0ca1b72203289315b",
+    "source_mesh": "assets/revolve3_2.stl",
+    "triangle_index_sha256": "7cf86991bf9ad38356baae48a7bc8fb4d88966cb9ff666103a4060af552f675a",
+    "triangles": 1008,
+    "vertex_array_sha256": "78b9975829be3aa9f67bb2f94c986e175a2d90e58fcd2cd07a1b1466282475d3",
+    "vertices": 504
+  },
+  {
+    "bounds_m": [
+      [
+        -0.06499999761581421,
+        -0.02800000086426735,
+        -0.02824999950826168
+      ],
+      [
+        0.06499999761581421,
+        2.2551405187698492e-17,
+        0.02824999950826168
+      ]
+    ],
+    "bytes": 123884,
+    "mesh": "mesh_054_standoff_plate.stl",
+    "normal_array_sha256": "a6a9eaf681d46c6613425e6ec621df0fe51ecc114e2d3788b410d8389bd3ce39",
+    "prim_path": "/Geometry/mesh_054",
+    "sha256": "24e9b1cd37e1ae27ee51aea0d73fbb47f661ac28b2823fe53a1488650ca19c8c",
+    "source_mesh": "assets/standoff_plate.stl",
+    "triangle_index_sha256": "13b116c4e767cab9b0f68b4e4414ecd653c4a77a8c53f46aefa65b2130c2be74",
+    "triangles": 2476,
+    "vertex_array_sha256": "ebf11c14bc4878363ebf65645fa71519b80a475279ac8552eff430e742589677",
+    "vertices": 1232
+  },
+  {
+    "bounds_m": [
+      [
+        -0.04500000178813934,
+        -0.02800000086426735,
+        -0.02824999950826168
+      ],
+      [
+        0.04500000178813934,
+        8.673617379884035e-18,
+        0.02824999950826168
+      ]
+    ],
+    "bytes": 91084,
+    "mesh": "mesh_055_standoff_plate__2.stl",
+    "normal_array_sha256": "8f8a8ab7079a0c8d5d5664d09e755f52806694cf06adb0daca7280d8fb1fe931",
+    "prim_path": "/Geometry/mesh_055",
+    "sha256": "f7898de852e9562a57d74a1ca63857ca0d59c371b8406421f7411552a52dc485",
+    "source_mesh": "assets/standoff_plate__2.stl",
+    "triangle_index_sha256": "ac2bc8bdc5835d7c7d46ceed4475f1171ed4e104a2ec4d0268a6c9abc83a6476",
+    "triangles": 1820,
+    "vertex_array_sha256": "0427e269f8d0e4dcd63387e1cbe0ae0df2e1853c4b071c9d98eaaa2fa524c336",
+    "vertices": 904
+  },
+  {
+    "bounds_m": [
+      [
+        -0.02347802370786667,
+        -0.033250000327825546,
+        -0.023489784449338913
+      ],
+      [
+        0.12999999523162842,
+        0.033250000327825546,
+        0.023489784449338913
+      ]
+    ],
+    "bytes": 1154584,
+    "mesh": "mesh_056_tibia.stl",
+    "normal_array_sha256": "05564ac7f262e4eebf0da4181d2ce61a03ff2af1f6ff796b663f2e3cd0293abd",
+    "prim_path": "/Geometry/mesh_056",
+    "sha256": "40f2e91ad5ebb4d852745381da9a3788f13ccd9dad6d403c65724472ecfc2b33",
+    "source_mesh": "assets/tibia.stl",
+    "triangle_index_sha256": "3b41e55e6976259a36f787740e1cf9ad82b28857a504883100e8d884db459dfc",
+    "triangles": 23090,
+    "vertex_array_sha256": "b35cef34ab924764378bbdb5b3e29756d29df70182c8b3dec2e226bfc4d972de",
+    "vertices": 11523
+  },
+  {
+    "bounds_m": [
+      [
+        -0.02348303608596325,
+        -0.026531999930739403,
+        -0.05197978764772415
+      ],
+      [
+        0.02348303608596325,
+        0.026531999930739403,
+        -0.0015999999595806003
+      ]
+    ],
+    "bytes": 317484,
+    "mesh": "mesh_057_tibia_attatchment_plate.stl",
+    "normal_array_sha256": "eb8340fb785b78a0375554ea6e903208fb8cbee220833e639cb2b5ba5ed360e8",
+    "prim_path": "/Geometry/mesh_057",
+    "sha256": "0ec429f1a53ec026d6273e989daeb742b112589833f8cdc92efec821ca04ec2a",
+    "source_mesh": "assets/tibia_attatchment_plate.stl",
+    "triangle_index_sha256": "89baf2093cb97a41b0d82787f370eafcce3f2882e84c6812c39e2aa71fa08e70",
+    "triangles": 6348,
+    "vertex_array_sha256": "ee427b3f156cdb72b50143c4d898e6401369898c0ba314390786c022e93c87d5",
+    "vertices": 3140
+  },
+  {
+    "bounds_m": [
+      [
+        -0.14499463140964508,
+        -0.22499825060367584,
+        0.061500001698732376
+      ],
+      [
+        0.14499999582767487,
+        0.22499115765094757,
+        0.06650000065565109
+      ]
+    ],
+    "bytes": 3206584,
+    "mesh": "mesh_058_top_enclosure.stl",
+    "normal_array_sha256": "636e84de47804292e036e53ae34574a27ca121be0788a95e1d16af93b1ef6c93",
+    "prim_path": "/Geometry/mesh_058",
+    "sha256": "99cf69d5dbb94cf7eb0e5fea47f22303506a612ed19d8499ff668b075de5c889",
+    "source_mesh": "assets/top_enclosure.stl",
+    "triangle_index_sha256": "004267b62c4ec0d581e2995b210502a60587ea8cd95a60cc1e7074a5b289b24c",
+    "triangles": 64130,
+    "vertex_array_sha256": "4d2d6f362f9dc5e99107470a391dd7479b584337ea43bc4c4ceb4111e6314b03",
+    "vertices": 31969
+  }
+]
