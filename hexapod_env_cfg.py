@@ -194,6 +194,12 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # standstill_speed_ratio * |cmd| for standstill_terminate_s seconds, the episode ends like a fall (same penalty).
     standstill_terminate_s: float = 0.0  # 0 = off
     standstill_speed_ratio: float = 0.5
+    # rl6: per-leg step reward on the actuated hip joint. Desired coxa velocity direction = (sign that moves the body
+    # along the command) x (-1 while the foot is loaded > gait_stance_force_n, +1 while its toe is lifted >
+    # gait_swing_clearance_m above standing, 0 otherwise). reward = mean_legs clamp(dq_coxa x dir / step_ref_vel, -1, 1),
+    # only when commanded. Standing scores 0 and symmetric random twitches average 0 (the rl3 ratchet cannot earn it).
+    step_reward_scale: float = 0.0
+    step_ref_vel: float = 1.0  # [rad/s] coxa speed that earns the full reward
     gait_toe_standing_z_m: float = 0.0078  # measured 2026-10-13 00:50 (diag_gait_clock_smoke.py): toe height in the default stance
 
     # success criteria — episode success_rate = per-env binary check that the *episode-mean*

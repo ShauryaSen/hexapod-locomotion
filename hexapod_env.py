@@ -98,6 +98,7 @@ class HexapodEnv(DirectRLEnv):
         self._episode_sums["ref_gait"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         # rl1 (2026-10-13): progress reward, command curriculum state, penalty curriculum factor
         self._episode_sums["progress"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+        self._episode_sums["step"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)  # rl6
         self._cmd_max_cur = self.cfg.command_curriculum_start if self.cfg.command_curriculum else self.cfg.command_lin_vel_max
         self._err_xy_ema = self._cmd_max_cur  # starts pessimistic: the range must be earned
         self._penalty_factor = 1.0
@@ -296,6 +297,19 @@ class HexapodEnv(DirectRLEnv):
         v_along = torch.sum(v_xy * cmd_xy, dim=1) / cmd_norm.clamp_min(1e-6)
         progress = torch.minimum(v_along.clamp_min(0.0), cmd_norm) / self.cfg.command_lin_vel_max
         progress = progress * (cmd_norm > 0.1 * self.cfg.command_lin_vel_max)
+        # rl6: per-leg step reward (see cfg). Foot states use the same lift/load gating as the clock reward.
+        if self.cfg.step_reward_scale != 0.0:
+            feet_force_st = torch.linalg.norm(self._contact_sensor.data.net_forces_w.torch[:, self._feet_ids], dim=-1)
+            loaded_st = (feet_force_st > self.cfg.gait_stance_force_n).float()
+            lifted_st = (toe_z > self.cfg.gait_toe_standing_z_m + self.cfg.gait_swing_clearance_m).float()
+            phase_dir = lifted_st - loaded_st  # +1 swing, -1 stance, 0 unloaded-but-not-lifted
+            moving_st = (cmd_norm > 0.1 * self.cfg.command_lin_vel_max).float()
+            body_dir = -torch.sign(self._commands[:, 1]) * moving_st  # Phase 0 sign convention, as in _ref_joint_delta
+            desired = body_dir.unsqueeze(1) * self._ref_side * phase_dir  # (N, 6)
+            dq_coxa = self._robot.data.joint_vel.torch[:, self._ref_coxa_ids]
+            step_r = (dq_coxa * desired / self.cfg.step_ref_vel).clamp(-1.0, 1.0).mean(dim=1)
+        else:
+            step_r = torch.zeros(self.num_envs, device=self.device)
         # rl1: penalty curriculum factor (common_step_counter = env steps so far)
         if self.cfg.penalty_curriculum_steps > 0:
             ramp = min(1.0, self.common_step_counter / self.cfg.penalty_curriculum_steps)
@@ -318,6 +332,7 @@ class HexapodEnv(DirectRLEnv):
             "stance_foot_vel": stance_foot_vel * self.cfg.stance_foot_vel_reward_scale * self.step_dt,
             "ref_gait": ref_gait * self.cfg.ref_gait_reward_scale * self.step_dt,
             "progress": progress * self.cfg.progress_reward_scale * self.step_dt,
+            "step": step_r * self.cfg.step_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Accumulate per-episode velocity tracking error sums; success is computed at reset
