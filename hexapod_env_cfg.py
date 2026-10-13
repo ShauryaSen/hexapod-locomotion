@@ -184,6 +184,10 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # min + (1 - min) * clip(env_step / penalty_curriculum_steps, 0, 1); 0 = off. Metrics/penalty_factor.
     penalty_curriculum_steps: int = 0
     penalty_curriculum_min: float = 0.1
+    # rl2: low-pass the body xy velocity (EMA, time constant vel_filter_tau_s) before the tracking, progress and
+    # curriculum-error terms. rl1 measured 0.08/s of "progress" from exploration jitter alone (deterministic rollout:
+    # 0.0004 m/s); zero-mean jitter averages out over ~a stride, real travel does not. 0 = off (raw velocity).
+    vel_filter_tau_s: float = 0.0
     gait_toe_standing_z_m: float = 0.0078  # measured 2026-10-13 00:50 (diag_gait_clock_smoke.py): toe height in the default stance
 
     # success criteria — episode success_rate = per-env binary check that the *episode-mean*

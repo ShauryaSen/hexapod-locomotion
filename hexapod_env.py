@@ -101,6 +101,7 @@ class HexapodEnv(DirectRLEnv):
         self._cmd_max_cur = self.cfg.command_curriculum_start if self.cfg.command_curriculum else self.cfg.command_lin_vel_max
         self._err_xy_ema = self._cmd_max_cur  # starts pessimistic: the range must be earned
         self._penalty_factor = 1.0
+        self._v_xy_filt = torch.zeros(self.num_envs, 2, device=self.device)  # rl2: low-passed body xy velocity
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -203,10 +204,15 @@ class HexapodEnv(DirectRLEnv):
         return observations
 
     def _get_rewards(self) -> torch.Tensor:
+        # rl2: optionally low-passed body xy velocity used by the tracking, progress and curriculum terms
+        v_xy_raw = self._robot.data.root_lin_vel_b.torch[:, :2]
+        if self.cfg.vel_filter_tau_s > 0.0:
+            self._v_xy_filt += (self.step_dt / self.cfg.vel_filter_tau_s) * (v_xy_raw - self._v_xy_filt)
+            v_xy = self._v_xy_filt
+        else:
+            v_xy = v_xy_raw
         # linear velocity tracking
-        lin_vel_error = torch.sum(
-            torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b.torch[:, :2]), dim=1
-        )
+        lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - v_xy), dim=1)
         # tolerance sigma scales with the command range, so standing still is never "close enough"
         lin_vel_sigma = self.cfg.tracking_sigma_ratio * self._cmd_max_cur  # follows the command curriculum
         lin_vel_error_mapped = torch.exp(-lin_vel_error / lin_vel_sigma**2)
@@ -285,7 +291,7 @@ class HexapodEnv(DirectRLEnv):
         # rl1: linear progress along the command direction, capped at the command magnitude
         cmd_xy = self._commands[:, :2]
         cmd_norm = torch.linalg.norm(cmd_xy, dim=1)
-        v_along = torch.sum(self._robot.data.root_lin_vel_b.torch[:, :2] * cmd_xy, dim=1) / cmd_norm.clamp_min(1e-6)
+        v_along = torch.sum(v_xy * cmd_xy, dim=1) / cmd_norm.clamp_min(1e-6)
         progress = torch.minimum(v_along.clamp_min(0.0), cmd_norm) / self.cfg.command_lin_vel_max
         progress = progress * (cmd_norm > 0.1 * self.cfg.command_lin_vel_max)
         # rl1: penalty curriculum factor (common_step_counter = env steps so far)
@@ -314,7 +320,7 @@ class HexapodEnv(DirectRLEnv):
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Accumulate per-episode velocity tracking error sums; success is computed at reset
         # as a per-env binary check on the *episode-mean* errors against the cfg thresholds.
-        error_xy = torch.linalg.norm(self._commands[:, :2] - self._robot.data.root_lin_vel_b.torch[:, :2], dim=-1)
+        error_xy = torch.linalg.norm(self._commands[:, :2] - v_xy, dim=-1)  # filtered when vel_filter_tau_s > 0
         error_yaw = torch.abs(self._commands[:, 2] - self._robot.data.root_ang_vel_b.torch[:, 2])
         self._error_xy_sum += error_xy
         self._error_yaw_sum += error_yaw
@@ -375,6 +381,7 @@ class HexapodEnv(DirectRLEnv):
             default_root_vel[:, 5:6] += self._commands[env_ids, 2:3] * rsi
         self._robot.write_root_pose_to_sim_index(root_pose=default_root_pose, env_ids=env_ids)
         self._robot.write_root_velocity_to_sim_index(root_velocity=default_root_vel, env_ids=env_ids)
+        self._v_xy_filt[env_ids] = default_root_vel[:, :2]  # rl2: filter starts at the reset velocity (= command for RSI starts)
         self._robot.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
         self._robot.write_joint_velocity_to_sim_index(velocity=joint_vel, env_ids=env_ids)
         # Logging
