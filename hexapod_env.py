@@ -96,6 +96,11 @@ class HexapodEnv(DirectRLEnv):
         self._ref_side = torch.tensor([-1.0, -1.0, -1.0, 1.0, 1.0, 1.0], device=self.device).unsqueeze(0)
         self._ref_leg_offsets = torch.tensor([0.0, math.pi, 0.0, math.pi, 0.0, math.pi], device=self.device).unsqueeze(0)
         self._episode_sums["ref_gait"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+        # rl1 (2026-10-13): progress reward, command curriculum state, penalty curriculum factor
+        self._episode_sums["progress"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+        self._cmd_max_cur = self.cfg.command_curriculum_start if self.cfg.command_curriculum else self.cfg.command_lin_vel_max
+        self._err_xy_ema = self._cmd_max_cur  # starts pessimistic: the range must be earned
+        self._penalty_factor = 1.0
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -203,7 +208,7 @@ class HexapodEnv(DirectRLEnv):
             torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b.torch[:, :2]), dim=1
         )
         # tolerance sigma scales with the command range, so standing still is never "close enough"
-        lin_vel_sigma = self.cfg.tracking_sigma_ratio * self.cfg.command_lin_vel_max
+        lin_vel_sigma = self.cfg.tracking_sigma_ratio * self._cmd_max_cur  # follows the command curriculum
         lin_vel_error_mapped = torch.exp(-lin_vel_error / lin_vel_sigma**2)
         # yaw rate tracking
         yaw_rate_error = torch.square(self._commands[:, 2] - self._robot.data.root_ang_vel_b.torch[:, 2])
@@ -277,14 +282,25 @@ class HexapodEnv(DirectRLEnv):
             ref_gait = torch.exp(-torch.mean(torch.square(q_err), dim=1) / self.cfg.ref_gait_sigma**2)
         else:
             ref_gait = torch.zeros(self.num_envs, device=self.device)
+        # rl1: linear progress along the command direction, capped at the command magnitude
+        cmd_xy = self._commands[:, :2]
+        cmd_norm = torch.linalg.norm(cmd_xy, dim=1)
+        v_along = torch.sum(self._robot.data.root_lin_vel_b.torch[:, :2] * cmd_xy, dim=1) / cmd_norm.clamp_min(1e-6)
+        progress = torch.minimum(v_along.clamp_min(0.0), cmd_norm) / self.cfg.command_lin_vel_max
+        progress = progress * (cmd_norm > 0.1 * self.cfg.command_lin_vel_max)
+        # rl1: penalty curriculum factor (common_step_counter = env steps so far)
+        if self.cfg.penalty_curriculum_steps > 0:
+            ramp = min(1.0, self.common_step_counter / self.cfg.penalty_curriculum_steps)
+            self._penalty_factor = self.cfg.penalty_curriculum_min + (1.0 - self.cfg.penalty_curriculum_min) * ramp
+        pf = self._penalty_factor
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
             "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
             "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
-            "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
-            "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
-            "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
+            "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * pf * self.step_dt,
+            "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * pf * self.step_dt,
+            "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * pf * self.step_dt,
             "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
             "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
@@ -293,6 +309,7 @@ class HexapodEnv(DirectRLEnv):
             "gait_clock": gait_match * self.cfg.gait_reward_scale * self.step_dt,
             "stance_foot_vel": stance_foot_vel * self.cfg.stance_foot_vel_reward_scale * self.step_dt,
             "ref_gait": ref_gait * self.cfg.ref_gait_reward_scale * self.step_dt,
+            "progress": progress * self.cfg.progress_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Accumulate per-episode velocity tracking error sums; success is computed at reset
@@ -333,7 +350,7 @@ class HexapodEnv(DirectRLEnv):
         self._gait_phase[env_ids] = torch.rand(len(env_ids), device=self.device) * 2 * math.pi
         self._prev_toe_b[env_ids] = self._toe_b()[env_ids]
         # Sample new commands
-        lin_max, yaw_max = self.cfg.command_lin_vel_max, self.cfg.command_yaw_rate_max
+        lin_max, yaw_max = self._cmd_max_cur, self.cfg.command_yaw_rate_max  # rl1: curriculum cap
         if self.cfg.command_forward_only:
             mag = torch.zeros(len(env_ids), device=self.device).uniform_(self.cfg.command_lin_vel_min, lin_max)
             sign = torch.where(torch.rand(len(env_ids), device=self.device) < 0.5, -1.0, 1.0)
@@ -348,6 +365,14 @@ class HexapodEnv(DirectRLEnv):
         default_root_pose = self._robot.data.default_root_pose.torch[env_ids]
         default_root_vel = self._robot.data.default_root_vel.torch[env_ids]
         default_root_pose[:, :3] += self._terrain.env_origins[env_ids]
+        # rl1: reference-state initialization. _gait_phase and _commands for env_ids were just re-sampled, so
+        # _ref_joint_delta gives a random mid-stride tripod pose for the new command. Root yaw is identity at
+        # reset, so the body-frame command is also the world-frame velocity.
+        if self.cfg.rsi_prob > 0.0:
+            rsi = (torch.rand(len(env_ids), device=self.device) < self.cfg.rsi_prob).float().unsqueeze(1)
+            joint_pos = joint_pos + self._ref_joint_delta()[env_ids] * rsi
+            default_root_vel[:, :2] += self._commands[env_ids, :2] * rsi
+            default_root_vel[:, 5:6] += self._commands[env_ids, 2:3] * rsi
         self._robot.write_root_pose_to_sim_index(root_pose=default_root_pose, env_ids=env_ids)
         self._robot.write_root_velocity_to_sim_index(root_velocity=default_root_vel, env_ids=env_ids)
         self._robot.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
@@ -369,6 +394,18 @@ class HexapodEnv(DirectRLEnv):
         mean_error_xy = self._error_xy_sum[env_ids] / denom
         mean_error_yaw = self._error_yaw_sum[env_ids] / denom
         extras["Metrics/error_vel_xy"] = mean_error_xy.mean().item()
+        # rl1: command curriculum. EMA over finished episodes only (the very first reset has step_count 0).
+        if self.cfg.command_curriculum:
+            finished = self._step_count[env_ids] > 0
+            if finished.any():
+                self._err_xy_ema += 0.01 * (mean_error_xy[finished].mean().item() - self._err_xy_ema)
+                if (self._err_xy_ema < self.cfg.command_curriculum_err_ratio * self._cmd_max_cur
+                        and self._cmd_max_cur < self.cfg.command_lin_vel_max):
+                    self._cmd_max_cur = min(self._cmd_max_cur + self.cfg.command_curriculum_step, self.cfg.command_lin_vel_max)
+                    self._err_xy_ema = self._cmd_max_cur  # re-prove at the new range
+        extras["Metrics/cmd_max_cur"] = self._cmd_max_cur
+        extras["Metrics/err_xy_ema"] = self._err_xy_ema
+        extras["Metrics/penalty_factor"] = self._penalty_factor
         extras["Metrics/error_vel_yaw"] = mean_error_yaw.mean().item()
         extras["Metrics/root_height"] = (self._root_z_sum[env_ids] / denom).mean().item()
         extras["Metrics/speed_xy"] = (self._speed_xy_sum[env_ids] / denom).mean().item()

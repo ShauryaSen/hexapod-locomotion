@@ -166,6 +166,24 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     ref_hip_max: float = 0.35
     ref_lift_femur: float = 0.35
     ref_lift_tibia: float = -0.30
+    # 2026-10-13 pure-RL attempt (rl1). All default-off; no scripted gait reaches the policy's actions.
+    # (1) linear progress: scale * clip(v_xy . cmd_dir, 0, |cmd|) / command_lin_vel_max. The exp tracking term pays
+    # ~nothing until the error is within sigma, so a slow shuffle scored like standing; this pays for every cm/s.
+    progress_reward_scale: float = 0.0
+    # (2) reference-state initialization (DeepMimic-style): with probability rsi_prob an episode starts in a random
+    # phase of the scripted tripod *pose* (from _ref_joint_delta) with root velocity = command. Reset only.
+    rsi_prob: float = 0.0
+    # (3) command curriculum: sampled |command| is capped at a running max that starts at command_curriculum_start and
+    # grows by command_curriculum_step (up to command_lin_vel_max) whenever the EMA of episode-mean err_xy drops below
+    # command_curriculum_err_ratio * current max. The tracking sigma follows the current max. Metrics/cmd_max_cur.
+    command_curriculum: bool = False
+    command_curriculum_start: float = 0.06
+    command_curriculum_step: float = 0.02
+    command_curriculum_err_ratio: float = 0.5
+    # (4) penalty curriculum: torque, joint-accel and action-rate penalties are multiplied by
+    # min + (1 - min) * clip(env_step / penalty_curriculum_steps, 0, 1); 0 = off. Metrics/penalty_factor.
+    penalty_curriculum_steps: int = 0
+    penalty_curriculum_min: float = 0.1
     gait_toe_standing_z_m: float = 0.0078  # measured 2026-10-13 00:50 (diag_gait_clock_smoke.py): toe height in the default stance
 
     # success criteria — episode success_rate = per-env binary check that the *episode-mean*
