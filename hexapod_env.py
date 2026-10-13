@@ -102,6 +102,8 @@ class HexapodEnv(DirectRLEnv):
         self._err_xy_ema = self._cmd_max_cur  # starts pessimistic: the range must be earned
         self._penalty_factor = 1.0
         self._v_xy_filt = torch.zeros(self.num_envs, 2, device=self.device)  # rl2: low-passed body xy velocity
+        self._still_steps = torch.zeros(self.num_envs, device=self.device)  # rl4: consecutive steps below the stand-still speed
+        self._standstill = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -341,6 +343,17 @@ class HexapodEnv(DirectRLEnv):
         died = torch.any(
             torch.max(torch.linalg.norm(net_contact_forces[:, :, self._base_id], dim=-1), dim=1)[0] > 1.0, dim=1
         )
+        # rl4: stand-still termination (uses the filtered velocity from the previous step's reward computation)
+        if self.cfg.standstill_terminate_s > 0.0:
+            cmd_xy = self._commands[:, :2]
+            cmd_norm = torch.linalg.norm(cmd_xy, dim=1)
+            v_src = self._v_xy_filt if self.cfg.vel_filter_tau_s > 0.0 else self._robot.data.root_lin_vel_b.torch[:, :2]
+            v_along = torch.sum(v_src * cmd_xy, dim=1) / cmd_norm.clamp_min(1e-6)
+            commanded = cmd_norm > 0.1 * self.cfg.command_lin_vel_max
+            still = commanded & (v_along < self.cfg.standstill_speed_ratio * cmd_norm)
+            self._still_steps = torch.where(still, self._still_steps + 1.0, torch.zeros_like(self._still_steps))
+            self._standstill = self._still_steps * self.step_dt > self.cfg.standstill_terminate_s
+            died = died | self._standstill
         return died, time_out
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
@@ -382,6 +395,7 @@ class HexapodEnv(DirectRLEnv):
         self._robot.write_root_pose_to_sim_index(root_pose=default_root_pose, env_ids=env_ids)
         self._robot.write_root_velocity_to_sim_index(root_velocity=default_root_vel, env_ids=env_ids)
         self._v_xy_filt[env_ids] = default_root_vel[:, :2]  # rl2: filter starts at the reset velocity (= command for RSI starts)
+        self._still_steps[env_ids] = 0.0  # rl4
         self._robot.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
         self._robot.write_joint_velocity_to_sim_index(velocity=joint_vel, env_ids=env_ids)
         # Logging
@@ -395,6 +409,7 @@ class HexapodEnv(DirectRLEnv):
         extras = dict()
         extras["Episode_Termination/base_contact"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
+        extras["Episode_Termination/standstill"] = torch.count_nonzero(self._standstill[env_ids]).item()  # rl4 (subset of base_contact count)
         # Flush per-episode velocity tracking metrics. ``success_rate`` is per-env binary:
         # the *episode-mean* error stayed below both thresholds, mean-reduced across env_ids.
         denom = self._step_count[env_ids].clamp_min(1.0)

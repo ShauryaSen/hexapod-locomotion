@@ -188,6 +188,12 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # curriculum-error terms. rl1 measured 0.08/s of "progress" from exploration jitter alone (deterministic rollout:
     # 0.0004 m/s); zero-mean jitter averages out over ~a stride, real travel does not. 0 = off (raw velocity).
     vel_filter_tau_s: float = 0.0
+    # rl4: stand-still termination. rl3 measured a "ratchet": the stochastic policy earns 0.3-0.4/s of progress from
+    # noise-driven drift while the mean action stands (deterministic rollout 0.0005 m/s), so no action direction is
+    # preferred and the mean never moves. If a commanded robot's (filtered) speed along the command stays below
+    # standstill_speed_ratio * |cmd| for standstill_terminate_s seconds, the episode ends like a fall (same penalty).
+    standstill_terminate_s: float = 0.0  # 0 = off
+    standstill_speed_ratio: float = 0.5
     gait_toe_standing_z_m: float = 0.0078  # measured 2026-10-13 00:50 (diag_gait_clock_smoke.py): toe height in the default stance
 
     # success criteria — episode success_rate = per-env binary check that the *episode-mean*
