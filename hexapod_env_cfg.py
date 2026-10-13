@@ -8,7 +8,7 @@ from isaaclab_physx.physics import PhysxCfg
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg
-from isaaclab.envs import DirectRLEnvCfg
+from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -58,6 +58,8 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 8
+    # video camera close to env 0 (default eye is 7.5 m away and the robot is ~0.1 m tall)
+    viewer: ViewerCfg = ViewerCfg(eye=(0.45, -0.45, 0.22), lookat=(0.0, 0.0, 0.1), origin_type="asset_root", asset_name="robot")
     action_scale = 0.35  # club value; measured fewer early falls than ANYmal's 0.5 (3.5% vs 4.4% per step)
     action_space = 18
     observation_space = 66
@@ -107,6 +109,10 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     """Largest commanded x or y velocity [m/s]."""
     command_yaw_rate_max: float = 0.3
     """Largest commanded yaw rate [rad/s]."""
+    # exp6+: forward-only commands. If True the command is +-U(command_lin_vel_min, command_lin_vel_max) along
+    # body -y/+y (the club's forward axis is -y), x = 0. Otherwise x and y are uniform in [-max, max] as before.
+    command_forward_only: bool = False
+    command_lin_vel_min: float = 0.0
 
     # velocity-tracking tolerance: reward = exp(-error^2 / sigma^2) with sigma = ratio * max command.
     # ANYmal uses commands up to 1.0 with sigma = 0.5 (the hard-coded 0.25 = 0.5^2), i.e. ratio 0.5.
@@ -133,6 +139,34 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # actions (ANYmal: 0%), so without this, ending the episode early is the cheapest policy.
     # Same weight as Isaac Lab's Cassie rough config (-200 * step_dt = -4 per termination).
     termination_reward_scale = -200.0
+    # Overnight 2026-10-13 (exp4+): tripod gait clock. With gait_reward_scale != 0 the policy observes
+    # [sin, cos] of a clock with period gait_period_s (observation_space += 2) and earns
+    # scale * (fraction of feet matching their phase - 0.5): tripod A (lf, rm, lr) swings in the first
+    # half of the cycle, tripod B in the second. Standing or holding feet up scores 0; a tripod 0.5/s.
+    gait_period_s: float = 0.8
+    gait_reward_scale: float = 0.0  # the env adds 2 to observation_space itself when this is non-zero
+    # exp5+: what counts as "swinging" / "in stance" for the clock reward. With clearance 0 (exp4) a foot
+    # counts as swinging whenever its contact force is below gait_stance_force_n, which a policy can game by
+    # unloading feet in place. With clearance > 0 the toe must be that far above its standing height.
+    gait_stance_force_n: float = 1.0
+    gait_swing_clearance_m: float = 0.0
+    gait_smooth: bool = False  # exp6+: partial credit = clamp(lift/clearance, 0, 1) in swing, clamp(force/stance_n, 0, 1) in stance
+    # exp7+: stance-foot velocity tracking. Feet in their stance half (and loaded) are rewarded for moving through
+    # the body frame at -command (what a planted foot does when the body advances): scale * mean exp(-|v_foot_b + c|^2 / sigma^2).
+    stance_foot_vel_reward_scale: float = 0.0
+    stance_foot_vel_sigma: float = 0.1
+    # exp8+: imitation of the Phase 0 scripted tripod. Reference joint deltas are a function of the clock phase and
+    # the command (sweep sign from the sign of cmd_y, hip amplitude = clamp(|cmd_y| / 0.45, 0, ref_hip_max)):
+    # reward = scale * exp(-mean_j (q_j - q_ref_j)^2 / ref_gait_sigma^2). Phase 0 measured: hip 0.2 rad, T 0.8 s -> ~0.09-0.1 m/s.
+    ref_gait_reward_scale: float = 0.0
+    # exp10+: residual control. Joint targets = default + reference tripod deltas + action_scale * action, so the
+    # robot walks the scripted gait at iteration 0 and the policy learns corrections (tracking, balance).
+    ref_gait_residual: bool = False
+    ref_gait_sigma: float = 0.15
+    ref_hip_max: float = 0.35
+    ref_lift_femur: float = 0.35
+    ref_lift_tibia: float = -0.30
+    gait_toe_standing_z_m: float = 0.0078  # measured 2026-10-13 00:50 (diag_gait_clock_smoke.py): toe height in the default stance
 
     # success criteria — episode success_rate = per-env binary check that the *episode-mean*
     # error stayed below both thresholds, mean-reduced across resetting envs.
