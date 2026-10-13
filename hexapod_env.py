@@ -394,7 +394,9 @@ class HexapodEnv(DirectRLEnv):
             default_root_vel[:, 5:6] += self._commands[env_ids, 2:3] * rsi
         self._robot.write_root_pose_to_sim_index(root_pose=default_root_pose, env_ids=env_ids)
         self._robot.write_root_velocity_to_sim_index(root_velocity=default_root_vel, env_ids=env_ids)
-        self._v_xy_filt[env_ids] = default_root_vel[:, :2]  # rl2: filter starts at the reset velocity (= command for RSI starts)
+        # rl5: the filter starts at zero. Preloading it with the RSI command velocity paid ~0.7 s of fake progress:
+        # diag_rsi_start.py measured the real body velocity at 0 within 0.1 s of an RSI start.
+        self._v_xy_filt[env_ids] = 0.0
         self._still_steps[env_ids] = 0.0  # rl4
         self._robot.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
         self._robot.write_joint_velocity_to_sim_index(velocity=joint_vel, env_ids=env_ids)
