@@ -14,7 +14,6 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor, RayCaster
-from isaaclab.utils.math import quat_apply, quat_apply_inverse
 
 from .hexapod_env_cfg import HexapodFlatEnvCfg, HexapodRoughEnvCfg
 
@@ -23,9 +22,9 @@ class HexapodEnv(DirectRLEnv):
     cfg: HexapodFlatEnvCfg | HexapodRoughEnvCfg
 
     def __init__(self, cfg: HexapodFlatEnvCfg | HexapodRoughEnvCfg, render_mode: str | None = None, **kwargs):
-        # gait clock adds [sin, cos] to the observation (done here because Hydra overrides land after cfg init)
+        # the gait clock adds [sin, cos] to the observation (set here because Hydra overrides land after cfg init)
         base_obs = 235 if isinstance(cfg, HexapodRoughEnvCfg) else 66
-        cfg.observation_space = base_obs + (2 if (cfg.gait_reward_scale != 0.0 or cfg.gait_clock_enabled) else 0)
+        cfg.observation_space = base_obs + (2 if cfg.gait_clock_enabled else 0)
         super().__init__(cfg, render_mode, **kwargs)
 
         # Joint position command (deviation from default joint positions)
@@ -44,11 +43,13 @@ class HexapodEnv(DirectRLEnv):
         self._error_yaw_sum = torch.zeros(self.num_envs, device=self.device)
         self._step_count = torch.zeros(self.num_envs, device=self.device)
         self._root_z_sum = torch.zeros(self.num_envs, device=self.device)  # logged as Metrics/root_height
-        # Overnight 2026-10-12: self-reported gait metrics (episode means, flushed at reset).
-        self._speed_xy_sum = torch.zeros(self.num_envs, device=self.device)  # Metrics/speed_xy: |v_xy| body frame
-        self._swing_sum = torch.zeros(self.num_envs, device=self.device)  # Metrics/swing_frac: >=1 foot airborne
-        self._torque_sat_sum = torch.zeros(self.num_envs, device=self.device)  # Metrics/torque_sat: joints at cap
+        # walking diagnostics (episode means): |v_xy|, fraction of steps with a foot in the air, joints at the torque cap
+        self._speed_xy_sum = torch.zeros(self.num_envs, device=self.device)
+        self._swing_sum = torch.zeros(self.num_envs, device=self.device)
+        self._torque_sat_sum = torch.zeros(self.num_envs, device=self.device)
         self._torque_cap = float(self.cfg.robot.actuators["legs"].effort_limit_sim)
+        # gait clock phase [rad], one per env
+        self._gait_phase = torch.zeros(self.num_envs, device=self.device)
 
         # Logging
         self._episode_sums = {
@@ -71,40 +72,6 @@ class HexapodEnv(DirectRLEnv):
         self._base_id, _ = self._contact_sensor.find_sensors("body")
         self._feet_ids, _ = self._contact_sensor.find_sensors(".*_tibia")
         self._undesired_contact_body_ids, _ = self._contact_sensor.find_sensors(".*_(coxa|femur)")  # measured: a trained policy sat on its coxas (37 N) and nothing penalized it
-        # tripod gait clock (exp4+)
-        self._gait_on = self.cfg.gait_reward_scale != 0.0 or self.cfg.gait_clock_enabled
-        self._gait_phase = torch.zeros(self.num_envs, device=self.device)
-        _, feet_names = self._contact_sensor.find_sensors(".*_tibia")
-        tripod_a = ("lf_tibia", "rm_tibia", "lr_tibia")
-        self._gait_offsets = torch.tensor(
-            [0.0 if n in tripod_a else math.pi for n in feet_names], device=self.device
-        ).unsqueeze(0)
-        self._episode_sums["gait_clock"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-        # toe positions: tibia links in the same name order as the contact-sensor feet
-        body_ids, body_names = self._robot.find_bodies(".*_tibia")
-        self._feet_body_ids = [body_ids[body_names.index(n)] for n in feet_names]
-        self._toe_offset = torch.tensor([0.1225, 0.0, 0.0], device=self.device)  # club stance.json toe_local_points_m
-        self._toe_z_max_sum = torch.zeros(self.num_envs, device=self.device)  # Metrics/toe_z_max
-        self._prev_toe_b = torch.zeros(self.num_envs, 6, 3, device=self.device)
-        self._episode_sums["stance_foot_vel"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-        # reference tripod (exp8+): joint index maps and per-leg sweep sign (club: left legs opposite to right legs)
-        legs = ("lf", "lm", "lr", "rf", "rm", "rr")
-        jn = self._robot.joint_names
-        self._ref_coxa_ids = [jn.index(f"{l}_coxa_yaw") for l in legs]
-        self._ref_femur_ids = [jn.index(f"{l}_femur_pitch") for l in legs]
-        self._ref_tibia_ids = [jn.index(f"{l}_tibia_pitch") for l in legs]
-        self._ref_side = torch.tensor([-1.0, -1.0, -1.0, 1.0, 1.0, 1.0], device=self.device).unsqueeze(0)
-        self._ref_leg_offsets = torch.tensor([0.0, math.pi, 0.0, math.pi, 0.0, math.pi], device=self.device).unsqueeze(0)
-        self._episode_sums["ref_gait"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-        # rl1 (2026-10-13): progress reward, command curriculum state, penalty curriculum factor
-        self._episode_sums["progress"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-        self._episode_sums["step"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)  # rl6
-        self._cmd_max_cur = self.cfg.command_curriculum_start if self.cfg.command_curriculum else self.cfg.command_lin_vel_max
-        self._err_xy_ema = self._cmd_max_cur  # starts pessimistic: the range must be earned
-        self._penalty_factor = 1.0
-        self._v_xy_filt = torch.zeros(self.num_envs, 2, device=self.device)  # rl2: low-passed body xy velocity
-        self._still_steps = torch.zeros(self.num_envs, device=self.device)  # rl4: consecutive steps below the stand-still speed
-        self._standstill = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -129,53 +96,12 @@ class HexapodEnv(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self._actions = actions.clone()
-        if self._gait_on:
+        if self.cfg.gait_clock_enabled:
             self._gait_phase = torch.remainder(self._gait_phase + 2 * math.pi * self.step_dt / self.cfg.gait_period_s, 2 * math.pi)
         self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos.torch
-        if self.cfg.ref_gait_residual and self._gait_on:
-            self._processed_actions = self._processed_actions + self._ref_joint_delta()
 
     def _apply_action(self):
         self._robot.set_joint_position_target_index(target=self._processed_actions)
-
-    def _toe_w(self) -> torch.Tensor:
-        """Toe world positions for the six feet, shape (num_envs, 6, 3)."""
-        pos = self._robot.data.body_pos_w.torch[:, self._feet_body_ids]
-        quat = self._robot.data.body_quat_w.torch[:, self._feet_body_ids]
-        return pos + quat_apply(quat, self._toe_offset.expand(pos.shape))
-
-    def _toe_z(self) -> torch.Tensor:
-        """Toe height above the ground plane for the six feet, shape (num_envs, 6)."""
-        return self._toe_w()[..., 2]
-
-    def _toe_b(self) -> torch.Tensor:
-        """Toe positions in the body frame, shape (num_envs, 6, 3)."""
-        rel = self._toe_w() - self._robot.data.root_pos_w.torch.unsqueeze(1)
-        quat = self._robot.data.root_quat_w.torch.unsqueeze(1).expand(-1, 6, -1)
-        return quat_apply_inverse(quat, rel)
-
-    def _ref_joint_delta(self, phase: torch.Tensor | None = None) -> torch.Tensor:
-        """Scripted tripod joint deltas [rad] for the current clock phase and command, shape (num_envs, num_joints).
-
-        Same waveform as diag_gait_openloop.py: in the stance half the coxa sweeps +A -> -A, in the swing half it
-        returns -A -> +A while femur/tibia lift with a half-sine. Sweep sign +1 moves the body along -y (Phase 0).
-        """
-        phase = self._gait_phase if phase is None else phase
-        ph = torch.remainder((phase.unsqueeze(1) + self._ref_leg_offsets) / (2 * math.pi), 1.0)  # (N,6)
-        stance = ph < 0.5
-        s_st = ph / 0.5
-        s_sw = (ph - 0.5) / 0.5
-        sweep = torch.where(stance, 1 - 2 * s_st, -1 + 2 * s_sw)
-        lift = torch.where(stance, torch.zeros_like(ph), torch.sin(math.pi * s_sw.clamp(0, 1)))
-        cmd_y = self._commands[:, 1]
-        moving = (cmd_y.abs() > 0.1 * self.cfg.command_lin_vel_max).float()
-        dir_sign = -torch.sign(cmd_y) * moving  # cmd -y (club forward) -> sweep sign +1
-        hip = (cmd_y.abs() / 0.45).clamp(max=self.cfg.ref_hip_max)
-        delta = torch.zeros(self.num_envs, len(self._robot.joint_names), device=self.device)
-        delta[:, self._ref_coxa_ids] = (dir_sign * hip).unsqueeze(1) * sweep * self._ref_side
-        delta[:, self._ref_femur_ids] = moving.unsqueeze(1) * self.cfg.ref_lift_femur * lift
-        delta[:, self._ref_tibia_ids] = moving.unsqueeze(1) * self.cfg.ref_lift_tibia * lift
-        return delta
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
@@ -198,7 +124,7 @@ class HexapodEnv(DirectRLEnv):
                     self._robot.data.joint_vel.torch,
                     height_data,
                     self._actions,
-                    torch.stack([torch.sin(self._gait_phase), torch.cos(self._gait_phase)], dim=1) if self._gait_on else None,
+                    torch.stack([torch.sin(self._gait_phase), torch.cos(self._gait_phase)], dim=1) if self.cfg.gait_clock_enabled else None,
                 )
                 if tensor is not None
             ],
@@ -208,17 +134,12 @@ class HexapodEnv(DirectRLEnv):
         return observations
 
     def _get_rewards(self) -> torch.Tensor:
-        # rl2: optionally low-passed body xy velocity used by the tracking, progress and curriculum terms
-        v_xy_raw = self._robot.data.root_lin_vel_b.torch[:, :2]
-        if self.cfg.vel_filter_tau_s > 0.0:
-            self._v_xy_filt += (self.step_dt / self.cfg.vel_filter_tau_s) * (v_xy_raw - self._v_xy_filt)
-            v_xy = self._v_xy_filt
-        else:
-            v_xy = v_xy_raw
         # linear velocity tracking
-        lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - v_xy), dim=1)
+        lin_vel_error = torch.sum(
+            torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b.torch[:, :2]), dim=1
+        )
         # tolerance sigma scales with the command range, so standing still is never "close enough"
-        lin_vel_sigma = self.cfg.tracking_sigma_ratio * self._cmd_max_cur  # follows the command curriculum
+        lin_vel_sigma = self.cfg.tracking_sigma_ratio * self.cfg.command_lin_vel_max
         lin_vel_error_mapped = torch.exp(-lin_vel_error / lin_vel_sigma**2)
         # yaw rate tracking
         yaw_rate_error = torch.square(self._commands[:, 2] - self._robot.data.root_ang_vel_b.torch[:, 2])
@@ -250,99 +171,25 @@ class HexapodEnv(DirectRLEnv):
         contacts = torch.sum(is_contact, dim=1)
         # flat orientation
         flat_orientation = torch.sum(torch.square(self._robot.data.projected_gravity_b.torch[:, :2]), dim=1)
-        # tripod gait clock: feet airborne in their swing half, on the ground in their stance half
-        toe_w = self._toe_w()
-        toe_z = toe_w[..., 2]
-        self._toe_z_max_sum += toe_z.max(dim=1)[0]
-        # stance-foot velocity through the body frame (finite difference of body-frame toe positions)
-        toe_b = self._toe_b()
-        v_foot_b = (toe_b - self._prev_toe_b) / self.step_dt
-        self._prev_toe_b = toe_b
-        stance_foot_vel = torch.zeros(self.num_envs, device=self.device)
-        if self.cfg.stance_foot_vel_reward_scale != 0.0 and self._gait_on:
-            feet_force_sv = torch.linalg.norm(self._contact_sensor.data.net_forces_w.torch[:, self._feet_ids], dim=-1)
-            stance_now = (torch.sin(self._gait_phase.unsqueeze(1) + self._gait_offsets) >= 0.0) & (feet_force_sv > self.cfg.gait_stance_force_n)
-            target = -self._commands[:, :2].unsqueeze(1)  # planted feet move backward through the body frame
-            err_f = torch.sum(torch.square(v_foot_b[..., :2] - target), dim=-1)
-            per_foot = torch.exp(-err_f / self.cfg.stance_foot_vel_sigma**2)
-            n_st = stance_now.float().sum(dim=1).clamp_min(1.0)
-            stance_foot_vel = (per_foot * stance_now.float()).sum(dim=1) / n_st
-            stance_foot_vel = stance_foot_vel * (torch.linalg.norm(self._commands[:, :2], dim=1) > 0.1 * self.cfg.command_lin_vel_max)
-        if self._gait_on:
-            feet_force = torch.linalg.norm(self._contact_sensor.data.net_forces_w.torch[:, self._feet_ids], dim=-1)
-            loaded = feet_force > self.cfg.gait_stance_force_n
-            if self.cfg.gait_swing_clearance_m > 0.0:
-                swinging = toe_z > self.cfg.gait_toe_standing_z_m + self.cfg.gait_swing_clearance_m
-            else:
-                swinging = ~loaded
-            # swing in the second half of each leg's cycle (sin < 0), consistent with _ref_joint_delta (fixed 02:12, after exp10 started)
-            swing_expected = torch.sin(self._gait_phase.unsqueeze(1) + self._gait_offsets) < 0.0
-            if self.cfg.gait_smooth and self.cfg.gait_swing_clearance_m > 0.0:
-                lift = ((toe_z - self.cfg.gait_toe_standing_z_m) / self.cfg.gait_swing_clearance_m).clamp(0.0, 1.0)
-                load = (feet_force / self.cfg.gait_stance_force_n).clamp(0.0, 1.0)
-                gait_match = torch.where(swing_expected, lift, load).mean(dim=1) - 0.5
-            else:
-                gait_match = torch.where(swing_expected, swinging, loaded).float().mean(dim=1) - 0.5
-            gait_match = gait_match * (torch.linalg.norm(self._commands[:, :2], dim=1) > 0.1 * self.cfg.command_lin_vel_max)
-        else:
-            gait_match = torch.zeros(self.num_envs, device=self.device)
 
-        # dm1: imitation weight anneal
-        self._ref_gait_w = 1.0
-        if self.cfg.ref_gait_anneal_steps > 0:
-            self._ref_gait_w = min(1.0, max(0.0, 1.0 - (self.common_step_counter - self.cfg.ref_gait_anneal_start_steps) / self.cfg.ref_gait_anneal_steps))
-        if self.cfg.ref_gait_reward_scale != 0.0 and self._gait_on:
-            q_err = self._robot.data.joint_pos.torch - self._robot.data.default_joint_pos.torch - self._ref_joint_delta()
-            ref_gait = torch.exp(-torch.mean(torch.square(q_err), dim=1) / self.cfg.ref_gait_sigma**2) * self._ref_gait_w
-        else:
-            ref_gait = torch.zeros(self.num_envs, device=self.device)
-        # rl1: linear progress along the command direction, capped at the command magnitude
-        cmd_xy = self._commands[:, :2]
-        cmd_norm = torch.linalg.norm(cmd_xy, dim=1)
-        v_along = torch.sum(v_xy * cmd_xy, dim=1) / cmd_norm.clamp_min(1e-6)
-        progress = torch.minimum(v_along.clamp_min(0.0), cmd_norm) / self.cfg.command_lin_vel_max
-        progress = progress * (cmd_norm > 0.1 * self.cfg.command_lin_vel_max)
-        # rl6: per-leg step reward (see cfg). Foot states use the same lift/load gating as the clock reward.
-        if self.cfg.step_reward_scale != 0.0:
-            feet_force_st = torch.linalg.norm(self._contact_sensor.data.net_forces_w.torch[:, self._feet_ids], dim=-1)
-            loaded_st = (feet_force_st > self.cfg.gait_stance_force_n).float()
-            lifted_st = (toe_z > self.cfg.gait_toe_standing_z_m + self.cfg.gait_swing_clearance_m).float()
-            phase_dir = lifted_st - loaded_st  # +1 swing, -1 stance, 0 unloaded-but-not-lifted
-            moving_st = (cmd_norm > 0.1 * self.cfg.command_lin_vel_max).float()
-            body_dir = -torch.sign(self._commands[:, 1]) * moving_st  # Phase 0 sign convention, as in _ref_joint_delta
-            desired = body_dir.unsqueeze(1) * self._ref_side * phase_dir  # (N, 6)
-            dq_coxa = self._robot.data.joint_vel.torch[:, self._ref_coxa_ids]
-            step_r = (dq_coxa * desired / self.cfg.step_ref_vel).clamp(-1.0, 1.0).mean(dim=1)
-        else:
-            step_r = torch.zeros(self.num_envs, device=self.device)
-        # rl1: penalty curriculum factor (common_step_counter = env steps so far)
-        if self.cfg.penalty_curriculum_steps > 0:
-            ramp = min(1.0, self.common_step_counter / self.cfg.penalty_curriculum_steps)
-            self._penalty_factor = self.cfg.penalty_curriculum_min + (1.0 - self.cfg.penalty_curriculum_min) * ramp
-        pf = self._penalty_factor
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
             "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
             "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
-            "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * pf * self.step_dt,
-            "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * pf * self.step_dt,
-            "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * pf * self.step_dt,
+            "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
+            "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
+            "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
             "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
             "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
             # _get_dones runs before _get_rewards, so reset_terminated already holds this step's deaths
             "termination": self.reset_terminated.float() * self.cfg.termination_reward_scale * self.step_dt,
-            "gait_clock": gait_match * self.cfg.gait_reward_scale * self.step_dt,
-            "stance_foot_vel": stance_foot_vel * self.cfg.stance_foot_vel_reward_scale * self.step_dt,
-            "ref_gait": ref_gait * self.cfg.ref_gait_reward_scale * self.step_dt,
-            "progress": progress * self.cfg.progress_reward_scale * self.step_dt,
-            "step": step_r * self.cfg.step_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Accumulate per-episode velocity tracking error sums; success is computed at reset
         # as a per-env binary check on the *episode-mean* errors against the cfg thresholds.
-        error_xy = torch.linalg.norm(self._commands[:, :2] - v_xy, dim=-1)  # filtered when vel_filter_tau_s > 0
+        error_xy = torch.linalg.norm(self._commands[:, :2] - self._robot.data.root_lin_vel_b.torch[:, :2], dim=-1)
         error_yaw = torch.abs(self._commands[:, 2] - self._robot.data.root_ang_vel_b.torch[:, 2])
         self._error_xy_sum += error_xy
         self._error_yaw_sum += error_yaw
@@ -363,17 +210,6 @@ class HexapodEnv(DirectRLEnv):
         died = torch.any(
             torch.max(torch.linalg.norm(net_contact_forces[:, :, self._base_id], dim=-1), dim=1)[0] > 1.0, dim=1
         )
-        # rl4: stand-still termination (uses the filtered velocity from the previous step's reward computation)
-        if self.cfg.standstill_terminate_s > 0.0:
-            cmd_xy = self._commands[:, :2]
-            cmd_norm = torch.linalg.norm(cmd_xy, dim=1)
-            v_src = self._v_xy_filt if self.cfg.vel_filter_tau_s > 0.0 else self._robot.data.root_lin_vel_b.torch[:, :2]
-            v_along = torch.sum(v_src * cmd_xy, dim=1) / cmd_norm.clamp_min(1e-6)
-            commanded = cmd_norm > 0.1 * self.cfg.command_lin_vel_max
-            still = commanded & (v_along < self.cfg.standstill_speed_ratio * cmd_norm)
-            self._still_steps = torch.where(still, self._still_steps + 1.0, torch.zeros_like(self._still_steps))
-            self._standstill = self._still_steps * self.step_dt > self.cfg.standstill_terminate_s
-            died = died | self._standstill
         return died, time_out
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
@@ -387,9 +223,8 @@ class HexapodEnv(DirectRLEnv):
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
         self._gait_phase[env_ids] = torch.rand(len(env_ids), device=self.device) * 2 * math.pi
-        self._prev_toe_b[env_ids] = self._toe_b()[env_ids]
         # Sample new commands
-        lin_max, yaw_max = self._cmd_max_cur, self.cfg.command_yaw_rate_max  # rl1: curriculum cap
+        lin_max, yaw_max = self.cfg.command_lin_vel_max, self.cfg.command_yaw_rate_max
         if self.cfg.command_forward_only:
             mag = torch.zeros(len(env_ids), device=self.device).uniform_(self.cfg.command_lin_vel_min, lin_max)
             sign = torch.where(torch.rand(len(env_ids), device=self.device) < 0.5, -1.0, 1.0)
@@ -404,27 +239,8 @@ class HexapodEnv(DirectRLEnv):
         default_root_pose = self._robot.data.default_root_pose.torch[env_ids]
         default_root_vel = self._robot.data.default_root_vel.torch[env_ids]
         default_root_pose[:, :3] += self._terrain.env_origins[env_ids]
-        # rl1: reference-state initialization. _gait_phase and _commands for env_ids were just re-sampled, so
-        # _ref_joint_delta gives a random mid-stride tripod pose for the new command. Root yaw is identity at
-        # reset, so the body-frame command is also the world-frame velocity.
-        if self.cfg.rsi_prob > 0.0:
-            rsi = (torch.rand(len(env_ids), device=self.device) < self.cfg.rsi_prob).float().unsqueeze(1)
-            joint_pos = joint_pos + self._ref_joint_delta()[env_ids] * rsi
-            if self.cfg.rsi_joint_vel:
-                # dm1: joint velocities from a forward difference of the reference along the clock
-                dt_fd = 0.01
-                dphi = 2 * math.pi * dt_fd / self.cfg.gait_period_s
-                d_now = self._ref_joint_delta()[env_ids]
-                d_next = self._ref_joint_delta(self._gait_phase + dphi)[env_ids]
-                joint_vel = joint_vel + (d_next - d_now) / dt_fd * rsi
-            default_root_vel[:, :2] += self._commands[env_ids, :2] * rsi
-            default_root_vel[:, 5:6] += self._commands[env_ids, 2:3] * rsi
         self._robot.write_root_pose_to_sim_index(root_pose=default_root_pose, env_ids=env_ids)
         self._robot.write_root_velocity_to_sim_index(root_velocity=default_root_vel, env_ids=env_ids)
-        # rl5: the filter starts at zero. Preloading it with the RSI command velocity paid ~0.7 s of fake progress:
-        # diag_rsi_start.py measured the real body velocity at 0 within 0.1 s of an RSI start.
-        self._v_xy_filt[env_ids] = 0.0
-        self._still_steps[env_ids] = 0.0  # rl4
         self._robot.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
         self._robot.write_joint_velocity_to_sim_index(velocity=joint_vel, env_ids=env_ids)
         # Logging
@@ -438,32 +254,17 @@ class HexapodEnv(DirectRLEnv):
         extras = dict()
         extras["Episode_Termination/base_contact"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
-        extras["Episode_Termination/standstill"] = torch.count_nonzero(self._standstill[env_ids]).item()  # rl4 (subset of base_contact count)
         # Flush per-episode velocity tracking metrics. ``success_rate`` is per-env binary:
         # the *episode-mean* error stayed below both thresholds, mean-reduced across env_ids.
         denom = self._step_count[env_ids].clamp_min(1.0)
         mean_error_xy = self._error_xy_sum[env_ids] / denom
         mean_error_yaw = self._error_yaw_sum[env_ids] / denom
         extras["Metrics/error_vel_xy"] = mean_error_xy.mean().item()
-        # rl1: command curriculum. EMA over finished episodes only (the very first reset has step_count 0).
-        if self.cfg.command_curriculum:
-            finished = self._step_count[env_ids] > 0
-            if finished.any():
-                self._err_xy_ema += 0.01 * (mean_error_xy[finished].mean().item() - self._err_xy_ema)
-                if (self._err_xy_ema < self.cfg.command_curriculum_err_ratio * self._cmd_max_cur
-                        and self._cmd_max_cur < self.cfg.command_lin_vel_max):
-                    self._cmd_max_cur = min(self._cmd_max_cur + self.cfg.command_curriculum_step, self.cfg.command_lin_vel_max)
-                    self._err_xy_ema = self._cmd_max_cur  # re-prove at the new range
-        extras["Metrics/cmd_max_cur"] = self._cmd_max_cur
-        extras["Metrics/err_xy_ema"] = self._err_xy_ema
-        extras["Metrics/penalty_factor"] = self._penalty_factor
-        extras["Metrics/ref_gait_weight"] = getattr(self, "_ref_gait_w", 1.0)  # dm1
         extras["Metrics/error_vel_yaw"] = mean_error_yaw.mean().item()
         extras["Metrics/root_height"] = (self._root_z_sum[env_ids] / denom).mean().item()
         extras["Metrics/speed_xy"] = (self._speed_xy_sum[env_ids] / denom).mean().item()
         extras["Metrics/swing_frac"] = (self._swing_sum[env_ids] / denom).mean().item()
         extras["Metrics/torque_sat"] = (self._torque_sat_sum[env_ids] / denom).mean().item()
-        extras["Metrics/toe_z_max"] = (self._toe_z_max_sum[env_ids] / denom).mean().item()
         extras["Metrics/success_rate"] = (
             (
                 (mean_error_xy < self.cfg.vel_xy_success_ratio * self.cfg.command_lin_vel_max)
@@ -480,5 +281,4 @@ class HexapodEnv(DirectRLEnv):
         self._speed_xy_sum[env_ids] = 0.0
         self._swing_sum[env_ids] = 0.0
         self._torque_sat_sum[env_ids] = 0.0
-        self._toe_z_max_sum[env_ids] = 0.0
         self.extras["log"].update(extras)

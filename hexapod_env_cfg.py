@@ -58,7 +58,7 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 8
-    # video camera close to env 0 (default eye is 7.5 m away and the robot is ~0.1 m tall)
+    # video camera next to env 0 (the default eye is 7.5 m away; the robot is ~0.1 m tall)
     viewer: ViewerCfg = ViewerCfg(eye=(0.45, -0.45, 0.22), lookat=(0.0, 0.0, 0.1), origin_type="asset_root", asset_name="robot")
     action_scale = 0.35  # club value; measured fewer early falls than ANYmal's 0.5 (3.5% vs 4.4% per step)
     action_space = 18
@@ -109,10 +109,15 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     """Largest commanded x or y velocity [m/s]."""
     command_yaw_rate_max: float = 0.3
     """Largest commanded yaw rate [rad/s]."""
-    # exp6+: forward-only commands. If True the command is +-U(command_lin_vel_min, command_lin_vel_max) along
-    # body -y/+y (the club's forward axis is -y), x = 0. Otherwise x and y are uniform in [-max, max] as before.
+    # Forward/backward-only commands: |v| ~ U(command_lin_vel_min, command_lin_vel_max) along body -y/+y (the
+    # club's forward axis is -y), x = 0. Used with the behavior-cloned tripod, whose teacher only walks forward/back.
     command_forward_only: bool = False
     command_lin_vel_min: float = 0.0
+    # Gait clock: when enabled, [sin, cos] of a phase with period gait_period_s is appended to the observation
+    # (observation_space += 2) and advances every step. The behavior-cloned policy needs it: the teacher gait is a
+    # function of this phase, and a memoryless MLP cannot keep time on its own from a standing start.
+    gait_clock_enabled: bool = False
+    gait_period_s: float = 0.8
 
     # velocity-tracking tolerance: reward = exp(-error^2 / sigma^2) with sigma = ratio * max command.
     # ANYmal uses commands up to 1.0 with sigma = 0.5 (the hard-coded 0.25 = 0.5^2), i.e. ratio 0.5.
@@ -139,75 +144,6 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # actions (ANYmal: 0%), so without this, ending the episode early is the cheapest policy.
     # Same weight as Isaac Lab's Cassie rough config (-200 * step_dt = -4 per termination).
     termination_reward_scale = -200.0
-    # Overnight 2026-10-13 (exp4+): tripod gait clock. With gait_reward_scale != 0 the policy observes
-    # [sin, cos] of a clock with period gait_period_s (observation_space += 2) and earns
-    # scale * (fraction of feet matching their phase - 0.5): tripod A (lf, rm, lr) swings in the first
-    # half of the cycle, tripod B in the second. Standing or holding feet up scores 0; a tripod 0.5/s.
-    gait_period_s: float = 0.8
-    gait_reward_scale: float = 0.0  # the env adds 2 to observation_space itself when this is non-zero
-    # exp5+: what counts as "swinging" / "in stance" for the clock reward. With clearance 0 (exp4) a foot
-    # counts as swinging whenever its contact force is below gait_stance_force_n, which a policy can game by
-    # unloading feet in place. With clearance > 0 the toe must be that far above its standing height.
-    gait_stance_force_n: float = 1.0
-    gait_swing_clearance_m: float = 0.0
-    gait_smooth: bool = False  # exp6+: partial credit = clamp(lift/clearance, 0, 1) in swing, clamp(force/stance_n, 0, 1) in stance
-    # exp7+: stance-foot velocity tracking. Feet in their stance half (and loaded) are rewarded for moving through
-    # the body frame at -command (what a planted foot does when the body advances): scale * mean exp(-|v_foot_b + c|^2 / sigma^2).
-    stance_foot_vel_reward_scale: float = 0.0
-    stance_foot_vel_sigma: float = 0.1
-    # exp8+: imitation of the Phase 0 scripted tripod. Reference joint deltas are a function of the clock phase and
-    # the command (sweep sign from the sign of cmd_y, hip amplitude = clamp(|cmd_y| / 0.45, 0, ref_hip_max)):
-    # reward = scale * exp(-mean_j (q_j - q_ref_j)^2 / ref_gait_sigma^2). Phase 0 measured: hip 0.2 rad, T 0.8 s -> ~0.09-0.1 m/s.
-    ref_gait_reward_scale: float = 0.0
-    # exp10+: residual control. Joint targets = default + reference tripod deltas + action_scale * action, so the
-    # robot walks the scripted gait at iteration 0 and the policy learns corrections (tracking, balance).
-    ref_gait_residual: bool = False
-    ref_gait_sigma: float = 0.15
-    ref_hip_max: float = 0.35
-    ref_lift_femur: float = 0.35
-    ref_lift_tibia: float = -0.30
-    # 2026-10-13 pure-RL attempt (rl1). All default-off; no scripted gait reaches the policy's actions.
-    # (1) linear progress: scale * clip(v_xy . cmd_dir, 0, |cmd|) / command_lin_vel_max. The exp tracking term pays
-    # ~nothing until the error is within sigma, so a slow shuffle scored like standing; this pays for every cm/s.
-    progress_reward_scale: float = 0.0
-    # (2) reference-state initialization (DeepMimic-style): with probability rsi_prob an episode starts in a random
-    # phase of the scripted tripod *pose* (from _ref_joint_delta) with root velocity = command. Reset only.
-    rsi_prob: float = 0.0
-    # (3) command curriculum: sampled |command| is capped at a running max that starts at command_curriculum_start and
-    # grows by command_curriculum_step (up to command_lin_vel_max) whenever the EMA of episode-mean err_xy drops below
-    # command_curriculum_err_ratio * current max. The tracking sigma follows the current max. Metrics/cmd_max_cur.
-    command_curriculum: bool = False
-    command_curriculum_start: float = 0.06
-    command_curriculum_step: float = 0.02
-    command_curriculum_err_ratio: float = 0.5
-    # (4) penalty curriculum: torque, joint-accel and action-rate penalties are multiplied by
-    # min + (1 - min) * clip(env_step / penalty_curriculum_steps, 0, 1); 0 = off. Metrics/penalty_factor.
-    penalty_curriculum_steps: int = 0
-    penalty_curriculum_min: float = 0.1
-    # rl2: low-pass the body xy velocity (EMA, time constant vel_filter_tau_s) before the tracking, progress and
-    # curriculum-error terms. rl1 measured 0.08/s of "progress" from exploration jitter alone (deterministic rollout:
-    # 0.0004 m/s); zero-mean jitter averages out over ~a stride, real travel does not. 0 = off (raw velocity).
-    vel_filter_tau_s: float = 0.0
-    # rl4: stand-still termination. rl3 measured a "ratchet": the stochastic policy earns 0.3-0.4/s of progress from
-    # noise-driven drift while the mean action stands (deterministic rollout 0.0005 m/s), so no action direction is
-    # preferred and the mean never moves. If a commanded robot's (filtered) speed along the command stays below
-    # standstill_speed_ratio * |cmd| for standstill_terminate_s seconds, the episode ends like a fall (same penalty).
-    standstill_terminate_s: float = 0.0  # 0 = off
-    standstill_speed_ratio: float = 0.5
-    # rl6: per-leg step reward on the actuated hip joint. Desired coxa velocity direction = (sign that moves the body
-    # along the command) x (-1 while the foot is loaded > gait_stance_force_n, +1 while its toe is lifted >
-    # gait_swing_clearance_m above standing, 0 otherwise). reward = mean_legs clamp(dq_coxa x dir / step_ref_vel, -1, 1),
-    # only when commanded. Standing scores 0 and symmetric random twitches average 0 (the rl3 ratchet cannot earn it).
-    step_reward_scale: float = 0.0
-    step_ref_vel: float = 1.0  # [rad/s] coxa speed that earns the full reward
-    # dm1 (DeepMimic-style, 2026-10-13 afternoon). The scripted tripod is used in training only: as a reward target
-    # and for reset states. Nothing scripted reaches the actions.
-    gait_clock_enabled: bool = False  # phase [sin, cos] in the observation and advancing, even with gait_reward_scale = 0
-    rsi_joint_vel: bool = False  # RSI also sets joint velocities = d(reference)/dt, so a started stride carries itself
-    # imitation weight anneal: ref_gait weight x clamp(1 - (env_step - start) / steps, 0, 1); steps = 0 disables
-    ref_gait_anneal_start_steps: int = 0
-    ref_gait_anneal_steps: int = 0
-    gait_toe_standing_z_m: float = 0.0078  # measured 2026-10-13 00:50 (diag_gait_clock_smoke.py): toe height in the default stance
 
     # success criteria — episode success_rate = per-env binary check that the *episode-mean*
     # error stayed below both thresholds, mean-reduced across resetting envs.
