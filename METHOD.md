@@ -6,7 +6,7 @@ Labels: **measured** = a number from a run; **code** = read from source; **remem
 ## 1. The method in one paragraph
 
 Six PPO runs from a standing start never discovered a coordinated six-leg sweep: the noisy policy earned velocity
-rewards from random twitching while the noise-free policy stood still (measured; `logs/overnight/README.md`).
+rewards from random twitching while the noise-free policy stood still (measured; experiment log in the private workspace, logs/overnight/README.md).
 So instead of asking PPO to *discover* the gait, we give the network the gait first and let PPO *improve* it:
 
 1. **Teacher.** The club's scripted tripod, written as joint-angle offsets from the standing pose as a function of a
