@@ -78,7 +78,9 @@ Noise-free rollouts from a standing start, 32 robots, commands 0.10-0.15 m/s:
 | clone (model_0) | 0.102 m/s | 46 deg | 0 |
 | model_100 | 0.106 m/s | 8.8 deg | 0 |
 | model_200 | 0.121 m/s | 5.4 deg | 0 |
+| model_299 (final) | 0.123 m/s | 4.6 deg | 0 |
 
+Training at iterations 250-299 (measured): episodes 999/1000, tracking error 0.025 m/s, torque saturation 3%, std 0.06.
 Ablation result: bc1 (the first success) also carried a "linear progress" reward and a velocity low-pass filter left
 over from the failed experiments; bcmin runs without them and tracks direction far better (5 deg vs 23 deg at
 iteration 200). The progress term paid for any motion component along the command and ignored sideways drift.
