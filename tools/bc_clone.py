@@ -41,6 +41,9 @@ parser.add_argument("--epochs", type=int, default=30)
 parser.add_argument("--std", type=float, default=0.1, help="exploration std written into the actor for PPO fine-tuning")
 parser.add_argument("--cmd_min", type=float, default=0.10)
 parser.add_argument("--cmd_max", type=float, default=0.15)
+parser.add_argument("--hip_max", type=float, default=0.35, help="teacher coxa amplitude cap [rad]")
+parser.add_argument("--period", type=float, default=0.8, help="teacher gait period [s] (= the env gait clock period)")
+parser.add_argument("--speed_at_hip_max", type=float, default=None, help="teacher speed at hip_max [m/s] (measured by tools/measure_clearance.py); default 0.45*hip_max (old mapping)")
 parser.add_argument("--out", default="/workspace/learning/logs/bc")
 parser.add_argument("--splice_into", default=None, help="an rsl_rl model_*.pt; writes model_bc.pt next to it")
 AppLauncher.add_app_launcher_args(parser)
@@ -52,45 +55,7 @@ import torch.nn as nn  # noqa: E402
 
 from hexapod.hexapod_env import HexapodEnv  # noqa: E402
 from hexapod.hexapod_env_cfg import HexapodFlatEnvCfg  # noqa: E402
-
-
-class ScriptedTripod:
-    """The club's tripod gait as joint-position deltas [rad] from the standing pose, as a function of the env's clock.
-
-    Tripod A (lf, rm, lr) and tripod B (lm, rf, rr) are half a cycle apart. In a leg's stance half the coxa sweeps
-    +A -> -A (pushing the body); in its swing half it returns -A -> +A while femur/tibia lift with a half-sine.
-    Left and right legs sweep in opposite directions. Sweep sign +1 moves the body along -y (measured in the overnight
-    Phase 0 open-loop test). Hip amplitude grows with the commanded speed (0.2 rad ~ 0.09-0.10 m/s, measured).
-    """
-
-    def __init__(self, env: HexapodEnv, hip_max: float = 0.35, lift_femur: float = 0.35, lift_tibia: float = -0.30):
-        legs = ("lf", "lm", "lr", "rf", "rm", "rr")
-        jn = env._robot.joint_names
-        self.coxa = [jn.index(f"{l}_coxa_yaw") for l in legs]
-        self.femur = [jn.index(f"{l}_femur_pitch") for l in legs]
-        self.tibia = [jn.index(f"{l}_tibia_pitch") for l in legs]
-        dev = env.device
-        self.side = torch.tensor([-1.0, -1.0, -1.0, 1.0, 1.0, 1.0], device=dev).unsqueeze(0)
-        self.offsets = torch.tensor([0.0, math.pi, 0.0, math.pi, 0.0, math.pi], device=dev).unsqueeze(0)
-        self.hip_max, self.lift_femur, self.lift_tibia = hip_max, lift_femur, lift_tibia
-        self.n_joints = len(jn)
-        self.cmd_max = env.cfg.command_lin_vel_max
-
-    def delta(self, env: HexapodEnv, phase: torch.Tensor) -> torch.Tensor:
-        ph = torch.remainder((phase.unsqueeze(1) + self.offsets) / (2 * math.pi), 1.0)  # (N, 6) in [0, 1)
-        stance = ph < 0.5
-        s_st, s_sw = ph / 0.5, (ph - 0.5) / 0.5
-        sweep = torch.where(stance, 1 - 2 * s_st, -1 + 2 * s_sw)
-        lift = torch.where(stance, torch.zeros_like(ph), torch.sin(math.pi * s_sw.clamp(0, 1)))
-        cmd_y = env._commands[:, 1]
-        moving = (cmd_y.abs() > 0.1 * self.cmd_max).float()
-        dir_sign = -torch.sign(cmd_y) * moving
-        hip = (cmd_y.abs() / 0.45).clamp(max=self.hip_max)
-        d = torch.zeros(env.num_envs, self.n_joints, device=env.device)
-        d[:, self.coxa] = (dir_sign * hip).unsqueeze(1) * sweep * self.side
-        d[:, self.femur] = moving.unsqueeze(1) * self.lift_femur * lift
-        d[:, self.tibia] = moving.unsqueeze(1) * self.lift_tibia * lift
-        return d
+from hexapod.scripted_tripod import ScriptedTripod  # noqa: E402
 
 
 os.makedirs(args.out, exist_ok=True)
@@ -98,9 +63,11 @@ cfg = HexapodFlatEnvCfg()
 cfg.scene.num_envs = args.num_envs
 cfg.command_forward_only, cfg.command_lin_vel_min, cfg.command_lin_vel_max, cfg.command_yaw_rate_max = True, args.cmd_min, args.cmd_max, 0.1
 cfg.gait_clock_enabled = True
+cfg.gait_period_s = args.period
+cfg.dr.enabled = False  # clone the teacher on the nominal robot
 env = HexapodEnv(cfg)
 dev = env.device
-teacher = ScriptedTripod(env)
+teacher = ScriptedTripod(env, hip_max=args.hip_max, speed_at_hip_max=args.speed_at_hip_max)
 dphi = 2 * math.pi * env.step_dt / cfg.gait_period_s
 
 
@@ -178,7 +145,7 @@ print(f"clone, deterministic, standing start: speed along cmd {spd:.4f} m/s (com
 actor = {f"mlp.{k}": v.detach().cpu() for k, v in mlp.state_dict().items()}
 actor["distribution.std_param"] = args.std * torch.ones(act_dim)
 torch.save(actor, os.path.join(args.out, "bc_actor.pt"))
-json.dump({"samples": int(X.shape[0]), "obs_dim": obs_dim, "val_mse": vl, "speed_along_cmd": spd, "deaths_per_step": dth, "std": args.std}, open(os.path.join(args.out, "bc_fit.json"), "w"), indent=1)
+json.dump({"hip_max": args.hip_max, "period": args.period, "speed_at_hip_max": teacher.speed_at_hip_max, "cmd_min": args.cmd_min, "cmd_max": args.cmd_max, "samples": int(X.shape[0]), "obs_dim": obs_dim, "val_mse": vl, "speed_along_cmd": spd, "deaths_per_step": dth, "std": args.std}, open(os.path.join(args.out, "bc_fit.json"), "w"), indent=1)
 print("saved", os.path.join(args.out, "bc_actor.pt"))
 
 # 5. splice into an rsl_rl checkpoint
