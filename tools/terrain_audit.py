@@ -28,6 +28,7 @@ parser.add_argument("--out", required=True)
 parser.add_argument("--step_cap", type=float, default=None)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--version", type=int, default=1)
+parser.add_argument("--dump_tile", nargs=2, default=None, metavar=("TYPE", "LEVEL"), help="print a coarse 2-D height grid of one tile (mm, relative to the origin)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -113,6 +114,16 @@ axes[-1, 1].set_xlabel("y - origin [m]")
 fig.tight_layout()
 fig.savefig(os.path.join(args.out, "terrain_sections.png"), dpi=150)
 
+if args.dump_tile:
+    name, lvl = args.dump_tile[0], int(args.dump_tile[1])
+    c = first_col[name]
+    o = origins[lvl, c]
+    xs, ys = o[0] - size / 2, o[1] - size / 2
+    sl = Hf[int((xs - x0) / res) : int((xs + size - x0) / res), int((ys - y0) / res) : int((ys + size - y0) / res)]
+    step = max(sl.shape[0] // 25, 1)
+    print(f"[audit] tile {name} L{lvl}: origin {np.round(o, 3).tolist()}, {sl.shape} cells, every {step}-th cell, mm relative to origin z; rows = x (down), cols = y (right, robots walk towards lower columns)")
+    for i in range(0, sl.shape[0], step):
+        print(" ".join(f"{int(round((v - o[2]) * 1000)):4d}" for v in sl[i, ::step]))
 md = ["| type | level | max abs z [m] | p95 cell step [m] | max cell step [m] | max slope over 0.1 m [deg] | p95 height [m] | p5 height [m] |", "|---|---|---|---|---|---|---|---|"]
 for r in rows_tbl:
     md.append(f"| {r['type']} | {r['level']} | {r['max_abs_z_m']:.4f} | {r['p95_dz_m']:.4f} | {r['max_dz_m']:.4f} | {r['max_slope_deg']:.1f} | {r['p95_height_m']:.4f} | {r['p5_height_m']:.4f} |")
