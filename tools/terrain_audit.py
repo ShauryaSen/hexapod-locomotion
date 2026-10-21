@@ -50,9 +50,10 @@ V = np.asarray(mesh.vertices)
 res = cfg.horizontal_scale
 x0, y0 = V[:, 0].min(), V[:, 1].min()
 nx, ny = int((V[:, 0].max() - x0) / res) + 2, int((V[:, 1].max() - y0) / res) + 2
-H = np.full((nx, ny), np.nan)
+H = np.full((nx, ny), -np.inf)
 ix, iy = ((V[:, 0] - x0) / res).round().astype(int), ((V[:, 1] - y0) / res).round().astype(int)
 np.maximum.at(H, (ix, iy), V[:, 2])  # highest vertex per cell (box tops win)
+H[np.isinf(H)] = np.nan
 # fill cells without vertices (box interiors, border) from the nearest filled cell
 from scipy import ndimage  # noqa: E402
 
