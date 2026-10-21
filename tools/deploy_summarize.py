@@ -3,10 +3,12 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Summarize deployment runs (decisions.md E2 / E4): one markdown table across arms x pi_0 seeds x schedules with
-bootstrap CIs over deployments. Regret = oracle - arm progress, matched on (checkpoint, schedule seed, env index);
-no-change cost = never - arm on nominal time, matched the same way. The hindsight-best schedule is the
-scheduled(T) period with the highest mean progress (a post-hoc pick, not a run). No Isaac Sim needed.
+"""Summarize deployment runs (decisions.md E2 / E4, E2 as updated 2026-10-21): one markdown table across arms x
+pi_0 seeds x schedules with bootstrap CIs over deployments. Each arm gets raw whole-deployment scores: forward
+progress is the ranking metric, summed reward is reported alongside and the two rankings are compared (a flag when
+they disagree); the oracle is one arm in the table. Quiet-stretch progress is compared with the never arm, matched
+on (checkpoint, schedule seed, env index). The hindsight-best schedule is the scheduled(T) period with the highest
+mean progress (a post-hoc pick, not a run). No Isaac Sim needed.
 
   python tools/deploy_summarize.py --root /workspace/isaaclab/logs/deploy --out summary.md
 """
@@ -62,12 +64,10 @@ def key(r):
     return (r["checkpoint"], r["schedule_seed"], r["env_seed"], r["env"])
 
 
-oracle = {key(r): r["progress_m"] for r in rows if r["arm"] == "oracle"}
 never = {key(r): r for r in rows if r["arm"] == "never"}
 for r in rows:
     k = key(r)
-    r["regret_m"] = oracle[k] - r["progress_m"] if k in oracle else float("nan")
-    r["no_change_cost_per_h"] = never[k]["no_change_progress_per_h"] - r["no_change_progress_per_h"] if k in never else float("nan")
+    r["quiet_vs_never_per_h"] = r["quiet_progress_per_h"] - never[k]["quiet_progress_per_h"] if k in never else float("nan")
 
 arm_label = lambda r: r["arm"] + (f"(T={r['period_min']:g})" if r["arm"] in ("scheduled", "periodic_reset") and r["period_min"] is not None else "")
 groups: dict[str, list] = {}
@@ -79,15 +79,24 @@ if sched_groups:
     best = max(sched_groups, key=lambda g: np.mean([r["progress_m"] for r in sched_groups[g]]))
     groups[f"hindsight_best_schedule[{best}]"] = sched_groups[best]
 
-cols = [("progress_m", "progress [m]"), ("regret_m", "regret vs oracle [m]"), ("falls_per_h", "falls/h"), ("track_err", "tracking err [m/s]"), ("false_alarms_per_h", "false alarms/h"), ("detection_delay_s", "detection delay [s]"), ("missed", "missed changes"), ("no_change_cost_per_h", "no-change cost [m/h]"), ("recurrence_gain_m", "recurrence gain [m]"), ("adapt_min", "adapt time [min]")]
+cols = [("progress_m", "progress [m]"), ("reward_sum", "summed reward"), ("falls_per_h", "falls/h"), ("track_err", "tracking err [m/s]"), ("false_alarms_per_h", "false alarms/h"), ("detection_delay_s", "detection delay [s]"), ("missed", "missed changes"), ("quiet_vs_never_per_h", "quiet progress vs never [m/h]"), ("recurrence_gain_m", "recurrence gain [m]"), ("adapt_min", "adapt time [min]")]
+seg_cols = [("quiet_progress_m", "quiet [m]"), ("quiet_min", "quiet [min]"), ("post_change_progress_m", "post-change [m]"), ("post_change_min", "post-change [min]"), ("recurrence_progress_m", "recurrence [m]"), ("recurrence_min", "recurrence [min]")]
 order = ["never", "always", "scheduled", "periodic_reset", "pause_hold", "three_sigma", "cusum", "triggered", "oracle", "hindsight"]
 names = sorted(groups, key=lambda g: next((i for i, o in enumerate(order) if g.startswith(o)), 99))
+rank_p = sorted(names, key=lambda g: -np.mean([r["progress_m"] for r in groups[g]]))
+rank_r = sorted(names, key=lambda g: -np.nanmean([r["reward_sum"] for r in groups[g]]))
 md = [f"# Deployment summary ({len(rows)} deployments, {len({r['checkpoint'] for r in rows})} pi_0 checkpoints, {len({r['schedule_seed'] for r in rows})} schedules)", "",
-      "mean [95% bootstrap CI over deployments]; regret and no-change cost are matched per (checkpoint, schedule, env).", "",
+      "mean [95% bootstrap CI over deployments]; ranking metric = forward progress; quiet progress vs never is matched per (checkpoint, schedule, env).", "",
+      f"ranking by progress: {' > '.join(rank_p)}", f"ranking by summed reward: {' > '.join(rank_r)}",
+      ("**rankings agree**" if rank_p == rank_r else "**rankings disagree** (progress is the primary metric, E2)"), "",
       "| arm | n | " + " | ".join(c[1] for c in cols) + " |", "|---|---|" + "---|" * len(cols)]
 for g in names:
     rs = groups[g]
     md.append(f"| {g} | {len(rs)} | " + " | ".join(fmt_ci([r[c] for r in rs], args.bootstrap_n) for c, _ in cols) + " |")
+md += ["", "## Progress decomposition (quiet / post-change / recurrence; window = adaptation budget)", "", "| arm | " + " | ".join(c[1] for c in seg_cols) + " |", "|---|" + "---|" * len(seg_cols)]
+for g in names:
+    rs = groups[g]
+    md.append(f"| {g} | " + " | ".join(fmt_ci([r[c] for r in rs], args.bootstrap_n) for c, _ in seg_cols) + " |")
 md += ["", "## Per checkpoint x schedule (progress [m], mean over envs)", ""]
 cks = sorted({r["checkpoint"] for r in rows})
 seeds = sorted({str(r["schedule_seed"]) for r in rows})

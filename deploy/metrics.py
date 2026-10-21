@@ -6,7 +6,7 @@
 """Metrics (decisions.md E2) from one deployment's streams and its schedule.
 
 Per deployment:
-  progress_m          metres along the command over the deployment (falls cost their recovery time: 0 progress)
+  progress_m          metres along the command over the deployment (falls cost their recovery time: 0 progress); the ranking metric
   progress_per_h      the same per robot-hour
   falls, falls_per_h
   track_err           mean tracking error over walking cycles [m/s]
@@ -14,11 +14,16 @@ Per deployment:
   false_alarms, false_alarms_per_h   adaptation starts (alarm cycles) with no true change in the preceding window
   detection_delay_s   per true change: time to the first alarm within the window (NaN = missed); mean over changes
   missed              changes with no alarm within the window
-  no_change_progress_per_h   progress rate on nominal (all factors off) time, for the no-change cost (= never - arm)
+  reward_sum          summed task reward over the deployment (reported alongside progress; E2 update 2026-10-21:
+                      no regret vs the oracle, the oracle is one arm in the table)
+  quiet_progress_m / quiet_min        progress on quiet stretches: more than one window after the last change
+  post_change_progress_m / post_change_min   progress within one window after any change
+  recurrence_progress_m / recurrence_min      progress within one window after a 2nd+ onset of a factor (subset of
+                      post-change)
   recurrence_gain_m   progress in the window after the 2nd onset of a factor minus the same after its 1st onset
                       (negative = forgetting), mean over recurring factors; NaN if nothing recurs
-Across arms (summarizer): regret = oracle - arm progress, no-change cost = never - arm, with bootstrap CIs over
-(seed x schedule) deployments.
+Across arms (summarizer): quiet-stretch progress vs the never arm, matched per (checkpoint, schedule, env); progress
+and reward rankings with a flag when they disagree; bootstrap CIs over (seed x schedule) deployments.
 """
 
 from __future__ import annotations
@@ -46,12 +51,14 @@ def deployment_metrics(arrays: dict[str, np.ndarray], i: int, schedule: Schedule
     adapting = arrays["adapting"][:, i] > 0.5
     alarm = arrays["alarm"][:, i] > 0.5
     track = arrays["track_err"][:, i]
+    reward = arrays["reward"][:, i] if "reward" in arrays else np.full_like(prog, np.nan)
     out = {
         "minutes": t[-1] / 60.0,
         "progress_m": float(np.nansum(prog)),
         "progress_per_h": float(np.nansum(prog) / max(hours, 1e-9)),
         "falls": float(np.nansum(falls)),
         "falls_per_h": float(np.nansum(falls) / max(hours, 1e-9)),
+        "reward_sum": float(np.nansum(reward)),
         "track_err": float(np.nanmean(track)) if np.any(~np.isnan(track)) else float("nan"),
         "adapt_min": float(adapting.sum() * cycle_s / 60.0),
         "alarms": int(alarm.sum()),
@@ -73,29 +80,38 @@ def deployment_metrics(arrays: dict[str, np.ndarray], i: int, schedule: Schedule
                 delays.append(after[0] - tc)
             else:
                 missed += 1
-        # nominal time: all factors off (from the logged true state)
-        nominal = (arrays["payload_kg"][:, i] == 0) & (arrays["motor_strength"][:, i] == 1) & (np.abs(arrays["friction"][:, i] - arrays["friction"][0, i]) < 1e-6)
-        nom_h = nominal.sum() * cycle_s / 3600.0
-        # recurrence gain
+        # segments: post-change = within one window after any change; recurrence = within one window after a
+        # 2nd+ onset of a factor; quiet = the rest (incl. the warm-up)
+        post = np.zeros(len(t), dtype=bool)
+        for tc in changes:
+            post |= (t > tc) & (t <= tc + rec_window_s)
+        rec = np.zeros(len(t), dtype=bool)
         gains = []
         for f in ("payload", "motor", "friction"):
             on = schedule.onsets(f)
+            for tc in on[1:]:
+                rec |= (t > tc) & (t <= tc + rec_window_s)
             if len(on) >= 2:
                 w1 = prog[(t > on[0]) & (t <= on[0] + rec_window_s)].sum()
                 w2 = prog[(t > on[1]) & (t <= on[1] + rec_window_s)].sum()
                 gains.append(w2 - w1)
+        quiet = ~post
+        nominal = (arrays["payload_kg"][:, i] == 0) & (arrays["motor_strength"][:, i] == 1) & (np.abs(arrays["friction"][:, i] - arrays["friction"][0, i]) < 1e-6)
         out.update({
+            "quiet_progress_m": float(prog[quiet].sum()), "quiet_min": float(quiet.sum() * cycle_s / 60.0),
+            "quiet_progress_per_h": float(prog[quiet].sum() / (quiet.sum() * cycle_s / 3600.0)) if quiet.any() else float("nan"),
+            "post_change_progress_m": float(prog[post].sum()), "post_change_min": float(post.sum() * cycle_s / 60.0),
+            "recurrence_progress_m": float(prog[rec].sum()), "recurrence_min": float(rec.sum() * cycle_s / 60.0),
+            "nominal_fraction": float(nominal.mean()),
             "false_alarms": fa,
             "false_alarms_per_h": fa / max(hours, 1e-9),
             "detection_delay_s": float(np.mean(delays)) if delays else float("nan"),
             "missed": missed,
             "n_changes": len(changes),
-            "no_change_progress_per_h": float(prog[nominal].sum() / nom_h) if nom_h > 0 else float("nan"),
-            "nominal_fraction": float(nominal.mean()),
             "recurrence_gain_m": float(np.mean(gains)) if gains else float("nan"),
         })
     else:
-        out.update({"false_alarms": int(alarm.sum()), "false_alarms_per_h": alarm.sum() / max(hours, 1e-9), "detection_delay_s": float("nan"), "missed": 0, "n_changes": 0, "no_change_progress_per_h": out["progress_per_h"], "nominal_fraction": 1.0, "recurrence_gain_m": float("nan")})
+        out.update({"false_alarms": int(alarm.sum()), "false_alarms_per_h": alarm.sum() / max(hours, 1e-9), "detection_delay_s": float("nan"), "missed": 0, "n_changes": 0, "quiet_progress_m": out["progress_m"], "quiet_min": out["minutes"], "quiet_progress_per_h": out["progress_per_h"], "post_change_progress_m": 0.0, "post_change_min": 0.0, "recurrence_progress_m": 0.0, "recurrence_min": 0.0, "nominal_fraction": 1.0, "recurrence_gain_m": float("nan")})
     return out
 
 
