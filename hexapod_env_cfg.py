@@ -86,6 +86,8 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
 
     # scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=4.0, replicate_physics=True)
+    filter_env_collisions: bool = True
+    """Call scene.filter_collisions on GPU too (see HexapodEnv._setup_scene)."""
 
     # events: none. Friction / mass / motor-strength randomization is done by the env (see ``dr``) so that the
     # sampled values are known per env (privileged observation) and can be set at runtime.

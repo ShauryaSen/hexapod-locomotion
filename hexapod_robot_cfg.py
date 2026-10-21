@@ -19,7 +19,14 @@ import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
-HEXAPOD_USD_PATH = os.path.join(os.path.dirname(__file__), "assets", "usd", "robot.usda")
+HEXAPOD_SDF_USD_PATH = os.path.join(os.path.dirname(__file__), "assets", "usd", "robot.usda")
+"""The club USD: 153 SDF collision meshes per robot."""
+HEXAPOD_SIMPLE_USD_PATH = os.path.join(os.path.dirname(__file__), "assets", "usd", "robot_simple.usda")
+"""One primitive per link (tools/make_simple_collision.py): 2.4-4.5x faster, trained policy transfers zero-shot
+(COLLISION_EXPERIMENT, 2026-10-15). Default since 2026-10-21: on the rough-terrain triangle mesh the SDF asset
+crashes the PhysX GPU solver (CUDA 700 at the first step) and takes >15 min to start; the primitive asset starts in
+2 s. Select the SDF asset with env.robot.spawn.usd_path=<...>/robot.usda."""
+HEXAPOD_USD_PATH = HEXAPOD_SIMPLE_USD_PATH
 
 HEXAPOD_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(

@@ -46,6 +46,7 @@ parser.add_argument("--period", type=float, default=0.8, help="teacher gait peri
 parser.add_argument("--speed_at_hip_max", type=float, default=None, help="teacher speed at hip_max [m/s] (measured by tools/measure_clearance.py); default 0.45*hip_max (old mapping)")
 parser.add_argument("--out", default="/workspace/learning/logs/bc")
 parser.add_argument("--splice_into", default=None, help="an rsl_rl model_*.pt; writes model_bc.pt next to it")
+parser.add_argument("--splice_out", default=None, help="output path of the spliced checkpoint (default: model_bc.pt next to --splice_into)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -158,7 +159,7 @@ if args.splice_into:
         a[k] = actor[k].to(a[k].dtype)
     ck["optimizer_state_dict"]["state"] = {}  # Adam moments belong to the old weights; start fresh
     ck["iter"] = 0
-    out = os.path.join(os.path.dirname(args.splice_into), "model_bc.pt")
+    out = args.splice_out or os.path.join(os.path.dirname(args.splice_into), "model_bc.pt")
     torch.save(ck, out)
     print("spliced into", out)
 

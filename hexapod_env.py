@@ -114,8 +114,10 @@ class HexapodEnv(DirectRLEnv):
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
-        # we need to explicitly filter collisions for CPU simulation
-        if self.device == "cpu":
+        # Filter collisions between envs explicitly (the Isaac Lab template only does this on CPU). Measured
+        # 2026-10-21 on Isaac Lab 3.0 / GPU: with a generator terrain, envs that share a tile origin spawned inside
+        # each other (10+ kN body forces, instant "falls"); the implicit PhysX env-id separation did not prevent it.
+        if self.device == "cpu" or self.cfg.filter_env_collisions:
             self.scene.filter_collisions(global_prim_paths=[self.cfg.terrain.prim_path])
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
