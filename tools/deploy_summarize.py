@@ -8,7 +8,13 @@ pi_0 seeds x schedules with bootstrap CIs over deployments. Each arm gets raw wh
 progress is the ranking metric, summed reward is reported alongside and the two rankings are compared (a flag when
 they disagree); the oracle is one arm in the table. Quiet-stretch progress is compared with the never arm, matched
 on (checkpoint, schedule seed, env index). The hindsight-best schedule is the scheduled(T) period with the highest
-mean progress (a post-hoc pick, not a run). No Isaac Sim needed.
+mean progress (a post-hoc pick, not a run).
+
+R2: schedules are tagged tune / test (ScheduleCfg.tune_seeds / test_seeds). Each arm family's knob (T, H, h, m) is
+chosen on tune deployments only (highest mean progress); the hypotheses are reported on test deployments with
+paired differences (same checkpoint, schedule, env) and bootstrap CIs. R7: bootstrap resamples pi_0 checkpoints
+(seeds) first, then deployments within; the number of updater seeds per (pi_0, deployment) is reported.
+No Isaac Sim needed.
 
   python tools/deploy_summarize.py --root /workspace/isaaclab/logs/deploy --out summary.md
 """
@@ -34,6 +40,7 @@ parser.add_argument("--detect_window_min", type=float, default=None)
 parser.add_argument("--bootstrap_n", type=int, default=1000)
 args = parser.parse_args()
 mcfg = C.MetricsCfg(detect_window_min=args.detect_window_min, bootstrap_n=args.bootstrap_n)
+scfg = C.ScheduleCfg()
 
 rows = []  # one per deployment
 for meta_path in sorted(glob.glob(os.path.join(args.root, "**", "meta.json"), recursive=True)):
@@ -55,7 +62,10 @@ for meta_path in sorted(glob.glob(os.path.join(args.root, "**", "meta.json"), re
         m = deployment_metrics(arrays, i, s, mcfg, budget)
         if not m:
             continue
-        m.update({"arm": meta["arm"], "checkpoint": os.path.basename(os.path.dirname(meta["checkpoint"])) + "/" + os.path.basename(meta["checkpoint"]), "schedule_seed": seed, "env": i, "env_seed": (meta.get("deploy_cfg") or {}).get("env_seed", 0), "period_min": (meta.get("arm_cfg") or {}).get("period_min"), "run_dir": run_dir})
+        split = (meta.get("schedule_split") or [None] * len(meta["env_schedule_seed"]))[i]
+        if split is None and seed is not None:
+            split = "tune" if seed in scfg.tune_seeds else "test" if seed in scfg.test_seeds else "other"
+        m.update({"arm": meta["arm"], "arm_label": meta.get("arm_label") or meta["arm"], "checkpoint": os.path.basename(os.path.dirname(meta["checkpoint"])) + "/" + os.path.basename(meta["checkpoint"]), "schedule_seed": seed, "split": split or "none", "env": i, "env_seed": (meta.get("deploy_cfg") or {}).get("env_seed", 0), "period_min": (meta.get("arm_cfg") or {}).get("period_min"), "run_dir": run_dir})
         rows.append(m)
 print(f"[summarize] {len(rows)} deployments from {len({r['run_dir'] for r in rows})} runs")
 
@@ -69,15 +79,72 @@ for r in rows:
     k = key(r)
     r["quiet_vs_never_per_h"] = r["quiet_progress_per_h"] - never[k]["quiet_progress_per_h"] if k in never else float("nan")
 
-arm_label = lambda r: r["arm"] + (f"(T={r['period_min']:g})" if r["arm"] in ("scheduled", "periodic_reset") and r["period_min"] is not None else "")
+arm_label = lambda r: r["arm_label"]
 groups: dict[str, list] = {}
 for r in rows:
     groups.setdefault(arm_label(r), []).append(r)
-# hindsight-best schedule: the scheduled(T) with the highest mean progress
+# hindsight-best schedule: the scheduled(T) with the highest mean progress (over all deployments; a post-hoc pick)
 sched_groups = {g: v for g, v in groups.items() if g.startswith("scheduled(")}
 if sched_groups:
     best = max(sched_groups, key=lambda g: np.mean([r["progress_m"] for r in sched_groups[g]]))
     groups[f"hindsight_best_schedule[{best}]"] = sched_groups[best]
+
+# ---- R2: knob selection on tune, hypotheses on test -----------------------------------------------------------
+tune = [r for r in rows if r["split"] == "tune"]
+test = [r for r in rows if r["split"] == "test"]
+selected: dict[str, str] = {}  # arm family -> chosen label
+for fam in ("scheduled", "periodic_reset", "pause_hold", "three_sigma", "cusum"):
+    labels = {r["arm_label"] for r in tune if r["arm"] == fam}
+    if labels:
+        selected[fam] = max(labels, key=lambda g: np.mean([r["progress_m"] for r in tune if r["arm_label"] == g]))
+for fam in ("never", "always", "oracle"):
+    if any(r["arm"] == fam for r in rows):
+        selected[fam] = fam
+
+
+def paired_diff(label_a: str, label_b: str, pool: list, metric: str = "progress_m"):
+    """Per-deployment differences a - b matched on (checkpoint, schedule, env_seed, env); seed-then-deployment bootstrap."""
+    ka = {key(r): r[metric] for r in pool if r["arm_label"] == label_a}
+    kb = {key(r): r[metric] for r in pool if r["arm_label"] == label_b}
+    common = sorted(set(ka) & set(kb))
+    if not common:
+        return None
+    diffs = np.array([ka[k] - kb[k] for k in common])
+    cks = np.array([k[0] for k in common])
+    lo, hi = hierarchical_bootstrap_ci(diffs, cks, args.bootstrap_n)
+    return {"n": len(common), "mean": float(diffs.mean()), "ci": [lo, hi], "n_checkpoints": len(set(cks))}
+
+
+def hierarchical_bootstrap_ci(x, groups_arr, n_boot, ci=0.95, rng=None):
+    """R7: resample pi_0 checkpoints with replacement, then deployments within each resampled checkpoint."""
+    rng = rng or np.random.default_rng(0)
+    uniq = np.unique(groups_arr)
+    means = []
+    for _ in range(n_boot):
+        pick = rng.choice(uniq, len(uniq), replace=True)
+        vals = []
+        for g in pick:
+            xg = x[groups_arr == g]
+            vals.append(xg[rng.integers(0, len(xg), len(xg))])
+        means.append(np.concatenate(vals).mean())
+    a = (1 - ci) / 2
+    return float(np.quantile(means, a)), float(np.quantile(means, 1 - a))
+
+
+hyp = []
+trig = [selected[f] for f in ("cusum", "three_sigma") if f in selected]
+if trig and "scheduled" in selected:
+    best_trig = max(trig, key=lambda g: np.mean([r["progress_m"] for r in tune if r["arm_label"] == g]))
+    d = paired_diff(best_trig, selected["scheduled"], test)
+    hyp.append(("H1: best trigger - best schedule (test, progress [m])", best_trig, selected["scheduled"], d, "holds (CI excludes 0, positive)" if d and d["ci"][0] > 0 else "fails" if d else "no paired test deployments"))
+if "always" in selected and "never" in selected:
+    d = paired_diff("always", "never", test, "quiet_progress_m")
+    hyp.append(("H2: always - never on quiet stretches (test, progress [m])", "always", "never", d, "holds (CI excludes 0, negative = cost)" if d and d["ci"][1] < 0 else "fails" if d else "no paired test deployments"))
+# R7: updater seeds per (pi_0, deployment)
+seed_counts = {}
+for r in rows:
+    seed_counts.setdefault((r["arm_label"], r["checkpoint"], r["schedule_seed"], r["env"]), set()).add(r["env_seed"])
+n_upd_seeds = sorted({len(v) for v in seed_counts.values()}) if seed_counts else []
 
 cols = [("progress_m", "progress [m]"), ("reward_sum", "summed reward"), ("falls_per_h", "falls/h"), ("track_err", "tracking err [m/s]"), ("false_alarms_per_h", "false alarms/h"), ("detection_delay_s", "detection delay [s]"), ("missed", "missed changes"), ("quiet_vs_never_per_h", "quiet progress vs never [m/h]"), ("recurrence_gain_m", "recurrence gain [m]"), ("adapt_min", "adapt time [min]")]
 seg_cols = [("quiet_progress_m", "quiet [m]"), ("quiet_min", "quiet [min]"), ("post_change_progress_m", "post-change [m]"), ("post_change_min", "post-change [min]"), ("recurrence_progress_m", "recurrence [m]"), ("recurrence_min", "recurrence [min]")]
@@ -89,10 +156,19 @@ md = [f"# Deployment summary ({len(rows)} deployments, {len({r['checkpoint'] for
       "mean [95% bootstrap CI over deployments]; ranking metric = forward progress; quiet progress vs never is matched per (checkpoint, schedule, env).", "",
       f"ranking by progress: {' > '.join(rank_p)}", f"ranking by summed reward: {' > '.join(rank_r)}",
       ("**rankings agree**" if rank_p == rank_r else "**rankings disagree** (progress is the primary metric, E2)"), "",
+      f"R2 split: {len(tune)} tune / {len(test)} test / {len(rows) - len(tune) - len(test)} untagged deployments; knobs chosen on tune: " + ", ".join(f"{k} -> {v}" for k, v in selected.items() if k != v), "",
+      f"R7: pi_0 checkpoints {len({r['checkpoint'] for r in rows})}; updater seeds per (arm, pi_0, schedule, env): {n_upd_seeds}", "",
       "| arm | n | " + " | ".join(c[1] for c in cols) + " |", "|---|---|" + "---|" * len(cols)]
 for g in names:
     rs = groups[g]
     md.append(f"| {g} | {len(rs)} | " + " | ".join(fmt_ci([r[c] for r in rs], args.bootstrap_n) for c, _ in cols) + " |")
+md += ["", "## Hypotheses on held-out (test) deployments, paired differences, seed-then-deployment bootstrap", ""]
+if hyp:
+    md += ["| hypothesis | a | b | n pairs (pi_0 seeds) | mean a - b | 95% CI | verdict |", "|---|---|---|---|---|---|---|"]
+    for name, a, b, d, verdict in hyp:
+        md.append(f"| {name} | {a} | {b} | " + (f"{d['n']} ({d['n_checkpoints']}) | {d['mean']:.2f} | [{d['ci'][0]:.2f}, {d['ci'][1]:.2f}] | {verdict} |" if d else "– | – | – | no paired test deployments |"))
+else:
+    md.append("(no tune/test-tagged runs yet)")
 md += ["", "## Progress decomposition (quiet / post-change / recurrence; window = adaptation budget)", "", "| arm | " + " | ".join(c[1] for c in seg_cols) + " |", "|---|" + "---|" * len(seg_cols)]
 for g in names:
     rs = groups[g]

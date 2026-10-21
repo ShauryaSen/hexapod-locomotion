@@ -34,6 +34,7 @@ STREAM_KEYS = (
     "motor_strength",
     "friction",
     "budget_used_min",  # adapt-minutes spent in the current adaptation episode
+    "baseline_mu",  # per-deployment nominal level of the (log) residual in use (R5), NaN without a baseliner
 )
 
 

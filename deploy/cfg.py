@@ -50,8 +50,10 @@ class DeployCfg:
     """Teleport every robot back to its terrain cell every this many seconds, not a fall (tools/long_run.py value:
     robots walk off the 10 m terrain in ~40 s at 0.28 m/s; MEASURED 2026-10-21). 0 = never."""
     fall_recovery_s: float = 5.0
-    """After a fall the robot is reset at its cell and held in the default pose for this long: no progress, no
-    samples for the updater, no residual. ASSUMED (hardware recovery = pick the robot up and set it down)."""
+    """Fixed scripted stand-up time (R4): after a fall the robot is reset at its cell and held in the default pose
+    for this long: no progress, no samples for the updater, no residual. ASSUMED (R4 says: set in the harness)."""
+    cap_progress_at_cmd: bool = True
+    """Progress per step = min(v_along_cmd, cmd) x dt (R4: progress capped at the commanded speed)."""
     explore_only_when_adapting: bool = True
     """Act with the Gaussian sample only while a deployment is adapting (PPO needs on-policy samples); act with the
     mean while holding. ASSUMED: exploration noise is a real cost of on-robot adaptation, so it is charged to the
@@ -143,6 +145,10 @@ class DetectorCfg:
     """Convergence stop: |z| below this many nominal sigmas ..."""
     converge_cycles: int = 25
     """... for this many consecutive cycles (25 x 0.4 s = 10 s) ends the adaptation episode. ASSUMED."""
+    baseline_cycles: int = 150
+    """R5: the nominal residual level is (re-)measured per deployment over this many cycles (150 = 60 s, ASSUMED)
+    at the start of the deployment and after every adaptation episode; z = (log r - mu_deployment) / sigma_global;
+    no alarms while measuring. 0 = global calibration only."""
 
 
 @dataclass
@@ -172,6 +178,10 @@ class ScheduleCfg:
     friction: float = 0.175
     """D1 test value: the middle of the 0.15-0.2 slippery patch. ASSUMED."""
     factors: tuple[str, ...] = ("payload", "motor", "friction")
+    tune_seeds: tuple[int, ...] = tuple(range(0, 10))
+    """R2: schedules used for choosing each arm's knob."""
+    test_seeds: tuple[int, ...] = tuple(range(10, 20))
+    """R2: held-out schedules; hypotheses are tested on these with paired differences."""
 
 
 @dataclass
@@ -181,7 +191,11 @@ class ArmCfg:
     name: str = "never"
     """never | always | scheduled | periodic_reset | pause_hold | three_sigma | cusum | triggered | oracle"""
     period_min: float = 10.0
-    """scheduled(T) / periodic_reset(T): period in robot-minutes."""
+    """scheduled(T) / periodic_reset(T): period in robot-minutes (the arm's knob, R6)."""
+    cusum_h: float | None = None
+    """cusum: alarm threshold (the arm's knob, R6: set from the target false-alarm rate); None = DetectorCfg."""
+    three_sigma_consecutive: int | None = None
+    """three_sigma: cycles above threshold before an alarm (knob); None = DetectorCfg."""
     hold_min: float = 10.0
     """pause_hold: hold time after each budget of adaptation."""
     budget_min: float | None = None

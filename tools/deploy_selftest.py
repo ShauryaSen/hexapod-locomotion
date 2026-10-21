@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from hexapod.deploy import cfg as C  # noqa: E402
 from hexapod.deploy.arms import ARM_NAMES, make_arm  # noqa: E402
 from hexapod.deploy.batched import build_from_checkpoint  # noqa: E402
-from hexapod.deploy.detectors import calibrate_cusum_h, three_sigma_fa_rate  # noqa: E402
+from hexapod.deploy.detectors import Baseliner, calibrate_cusum_h, three_sigma_fa_rate  # noqa: E402
 from hexapod.deploy.ensemble import DynamicsEnsemble, train_ensemble  # noqa: E402
 from hexapod.deploy.metrics import deployment_metrics, bootstrap_ci  # noqa: E402
 from hexapod.deploy.schedule import generate_schedule  # noqa: E402
@@ -119,6 +119,12 @@ for name in ARM_NAMES:
         if out["alarm"][0]:
             alarms.append(round(t))
     print(f"[4] arm {name:14s}: adapt cycles {sum(adapt_hist)}/900, alarms at t[s] {alarms[:6]}")
+
+# ---- 4b. R5 baseliner: per-deployment mean removed, NaN while collecting
+bl = Baseliner(2, 10, 1.0, 0.0, dev)
+zs_ = [bl.step(torch.tensor([5.0 + 0.1 * c, -3.0], device=dev)) for c in range(12)]
+assert torch.isnan(zs_[0]).all() and not torch.isnan(zs_[11]).any() and abs(zs_[11][1].item()) < 1e-6
+print(f"[4b] baseliner: mu after 10 cycles {bl.mu.tolist()}, z at cycle 12 {zs_[11].tolist()}")
 
 # ---- 5. detectors offline ---------------------------------------------------------------------------------------
 rng = np.random.default_rng(0)

@@ -34,6 +34,8 @@ parser.add_argument("--run_dir", default=None)
 parser.add_argument("--task", default="Hexapod-Rough-Direct-v0")
 parser.add_argument("--num_envs", type=int, default=16)
 parser.add_argument("--factor", default="payload", choices=["payload", "motor", "friction"])
+parser.add_argument("--values", type=float, nargs="*", default=None, help="R3: test values of the factor tried inward in order (e.g. motor 0.5 0.6 0.7); stops at the first recoverable one. Default: the ScheduleCfg test value")
+parser.add_argument("--recoverable_frac", type=float, default=0.5, help="R3: a value counts as recoverable when the adapting arm reaches T50 in at least this fraction of deployments (ASSUMED)")
 parser.add_argument("--t_on", type=float, default=60.0)
 parser.add_argument("--minutes", type=float, default=12.0)
 parser.add_argument("--arms", nargs=2, default=["never", "always"], help="frozen arm, adapting arm")
@@ -81,108 +83,133 @@ os.makedirs(out_dir, exist_ok=True)
 env, applied = make_env(dcfg, args.checkpoint, args.num_envs, args.device, args.run_dir)
 dev, N = env.device, env.num_envs
 ids = torch.arange(N, device=dev)
-sched = Schedule(seed=-1, length_s=args.minutes * 60.0, events=[ChangeEvent(args.t_on, args.factor, True)], cfg={"manual": True})
-schedules = [sched] * N
 actor, critic, info = build_from_checkpoint(args.checkpoint, N, dev)
 ensemble = DynamicsEnsemble.load(args.ensemble, dev) if args.ensemble else None
 cycle_s = dcfg.gait_cycle_s
+default_value = {"payload": scfg.payload_kg, "motor": scfg.motor_strength, "friction": scfg.friction}[args.factor]
+values = args.values if args.values else [default_value]
+attempts = []
+out_root = out_dir
 
-runs = {}
-for arm_name in args.arms:
-    print(f"[t50] ===== arm {arm_name} =====", flush=True)
-    # fresh deployments: pi_0 weights, nominal robot, robots back on their cells
-    actor.load_rsl_rl(info["actor"])
-    if info["critic"] is not None:
-        critic.load_rsl_rl(info["critic"])
-    env.set_nominal_dr(ids)
-    env.reset()
-    updater = KLAnchoredPPO(actor, critic, info["actor"], ucfg, dev, info["obs_dim"])
-    arm = make_arm(arm_name, N, C.ArmCfg(name=arm_name, budget_min=float("inf")), ucfg, detcfg, dev, cycle_s, schedules)
-    if arm_name == "always":
-        # the adapting arm starts at the change, like the oracle; before it, it is frozen pi_0
-        arm = make_arm("oracle", N, C.ArmCfg(name="oracle", budget_min=float("inf")), ucfg, detcfg, dev, cycle_s, schedules)
-    applier = ScheduleApplier(env, schedules, scfg)
-    runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"])
-    summary = runner.run(args.minutes)
-    sub = os.path.join(out_dir, arm_name)
-    runner.stream.save(sub, {"arm": arm_name, "checkpoint": args.checkpoint, "factor": args.factor, "t_on": args.t_on, "env_applied": applied, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg)})
-    json.dump(summary, open(os.path.join(sub, "summary.json"), "w"), indent=1)
-    runs[arm_name] = runner.stream.arrays()
-    env.release_dr(ids)
+
+def run_value(value: float, out_dir: str):
+  sc = C.ScheduleCfg(**{**scfg.__dict__, {"payload": "payload_kg", "motor": "motor_strength", "friction": "friction"}[args.factor]: value})
+  sched = Schedule(seed=-1, length_s=args.minutes * 60.0, events=[ChangeEvent(args.t_on, args.factor, True)], cfg={"manual": True, "value": value})
+  schedules = [sched] * N
+  runs = {}
+  for arm_name in args.arms:
+      print(f"[t50] ===== arm {arm_name} =====", flush=True)
+      # fresh deployments: pi_0 weights, nominal robot, robots back on their cells
+      actor.load_rsl_rl(info["actor"])
+      if info["critic"] is not None:
+          critic.load_rsl_rl(info["critic"])
+      env.set_nominal_dr(ids)
+      env.reset()
+      updater = KLAnchoredPPO(actor, critic, info["actor"], ucfg, dev, info["obs_dim"])
+      arm = make_arm(arm_name, N, C.ArmCfg(name=arm_name, budget_min=float("inf")), ucfg, detcfg, dev, cycle_s, schedules)
+      if arm_name == "always":
+          # the adapting arm starts at the change, like the oracle; before it, it is frozen pi_0
+          arm = make_arm("oracle", N, C.ArmCfg(name="oracle", budget_min=float("inf")), ucfg, detcfg, dev, cycle_s, schedules)
+      applier = ScheduleApplier(env, schedules, sc)
+      runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"])
+      summary = runner.run(args.minutes)
+      sub = os.path.join(out_dir, arm_name)
+      runner.stream.save(sub, {"arm": arm_name, "checkpoint": args.checkpoint, "factor": args.factor, "t_on": args.t_on, "env_applied": applied, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg)})
+      json.dump(summary, open(os.path.join(sub, "summary.json"), "w"), indent=1)
+      runs[arm_name] = runner.stream.arrays()
+      env.release_dr(ids)
+
+  return runs
+
 
 # ---- analysis ---------------------------------------------------------------------------------------------------
-A, B = args.arms
-t = runs[A]["t_s"][:, 0]
-win = int(round(args.rate_window_min * 60.0 / cycle_s))
+def analyse(runs, value, out_dir):
+  A, B = args.arms
+  t = runs[A]["t_s"][:, 0]
+  win = int(round(args.rate_window_min * 60.0 / cycle_s))
 
 
-def rate_per_min(prog):  # (C, N) -> windowed progress rate [m/min], trailing window
-    c = np.cumsum(np.nan_to_num(prog), 0)
-    out = np.full_like(prog, np.nan)
-    out[win - 1 :] = (c[win - 1 :] - np.vstack([np.zeros((1, prog.shape[1])), c[:-win]])) / (win * cycle_s / 60.0)
-    return out
+  def rate_per_min(prog):  # (C, N) -> windowed progress rate [m/min], trailing window
+      c = np.cumsum(np.nan_to_num(prog), 0)
+      out = np.full_like(prog, np.nan)
+      out[win - 1 :] = (c[win - 1 :] - np.vstack([np.zeros((1, prog.shape[1])), c[:-win]])) / (win * cycle_s / 60.0)
+      return out
 
 
-before = t <= args.t_on
-steady = t > t[-1] - args.steady_min * 60.0
-R0 = np.concatenate([runs[A]["progress_m"][before], runs[B]["progress_m"][before]]).sum(0) / 2 / (args.t_on / 60.0)  # per env, m/min
-Rf = runs[A]["progress_m"][steady].sum(0) / (steady.sum() * cycle_s / 60.0)
-rateB = rate_per_min(runs[B]["progress_m"])
-rateA = rate_per_min(runs[A]["progress_m"])
-gap = R0 - Rf
-target = Rf + 0.5 * gap
-t50 = np.full(N, np.nan)
-for i in range(N):
-    after = (t > args.t_on + args.rate_window_min * 60.0) & (rateB[:, i] >= target[i])
-    if after.any():
-        t50[i] = t[np.argmax(after)] - args.t_on
-end_B = runs[B]["progress_m"][steady].sum(0) / (steady.sum() * cycle_s / 60.0)
-recovered = np.where(gap > 1e-6, (end_B - Rf) / gap, np.nan)
-res = {
-    "checkpoint": args.checkpoint, "factor": args.factor, "t_on": args.t_on, "minutes": args.minutes, "num_envs": N, "arms": args.arms,
-    "updater_cfg": C.to_dict(ucfg), "rate_window_min": args.rate_window_min, "steady_min": args.steady_min,
-    "R0_m_per_min": {"mean": float(R0.mean()), "std": float(R0.std())},
-    "Rf_m_per_min": {"mean": float(Rf.mean()), "std": float(Rf.std())},
-    "gap_m_per_min": {"mean": float(gap.mean()), "std": float(gap.std())},
-    "end_rate_adapting_m_per_min": {"mean": float(end_B.mean()), "std": float(end_B.std())},
-    "recovered_fraction_at_end": {"mean": float(np.nanmean(recovered)), "std": float(np.nanstd(recovered)), "n": int(np.sum(~np.isnan(recovered)))},
-    "T50_s": {"mean": float(np.nanmean(t50)) if np.any(~np.isnan(t50)) else None, "median": float(np.nanmedian(t50)) if np.any(~np.isnan(t50)) else None, "std": float(np.nanstd(t50)) if np.any(~np.isnan(t50)) else None, "n_reached": int(np.sum(~np.isnan(t50))), "per_env": t50.tolist()},
-    "falls": {A: float(np.nansum(runs[A]["falls"])), B: float(np.nansum(runs[B]["falls"]))},
-    "updates_B": float(np.nansum(runs[B]["updates"])), "kl_pi0_B_end": float(np.nanmean(runs[B]["kl_pi0"][-1])),
-    "label": "PRELIMINARY (one pi_0 seed, one factor)",
-}
-json.dump(res, open(os.path.join(out_dir, "t50.json"), "w"), indent=1)
-md = [f"# T50, {args.factor} on at {args.t_on:.0f} s, {N} deployments, {os.path.basename(args.checkpoint)} (PRELIMINARY)", "",
-      f"arms: frozen = {A}, adapting = {B} (adapting from the change; lr {ucfg.learning_rate}, kl weight {ucfg.kl_anchor_weight}, {ucfg.steps_per_batch} steps/batch)", "",
-      "| quantity | mean | std |", "|---|---|---|",
-      f"| R0 nominal rate [m/min] | {R0.mean():.2f} | {R0.std():.2f} |", f"| Rf frozen rate after change [m/min] | {Rf.mean():.2f} | {Rf.std():.2f} |",
-      f"| gap [m/min] | {gap.mean():.2f} | {gap.std():.2f} |", f"| adapting rate at the end [m/min] | {end_B.mean():.2f} | {end_B.std():.2f} |",
-      f"| recovered fraction of the gap at the end | {np.nanmean(recovered):.2f} | {np.nanstd(recovered):.2f} |",
-      f"| T50 [s] (n reached {int(np.sum(~np.isnan(t50)))}/{N}) | {np.nanmean(t50) if np.any(~np.isnan(t50)) else float('nan'):.1f} | {np.nanstd(t50) if np.any(~np.isnan(t50)) else float('nan'):.1f} |",
-      f"| falls frozen / adapting | {res['falls'][A]:.0f} | {res['falls'][B]:.0f} |", ""]
-open(os.path.join(out_dir, "t50.md"), "w").write("\n".join(md))
-print("\n".join(md))
-try:
-    import matplotlib
+  before = t <= args.t_on
+  steady = t > t[-1] - args.steady_min * 60.0
+  R0 = np.concatenate([runs[A]["progress_m"][before], runs[B]["progress_m"][before]]).sum(0) / 2 / (args.t_on / 60.0)  # per env, m/min
+  Rf = runs[A]["progress_m"][steady].sum(0) / (steady.sum() * cycle_s / 60.0)
+  rateB = rate_per_min(runs[B]["progress_m"])
+  rateA = rate_per_min(runs[A]["progress_m"])
+  gap = R0 - Rf
+  target = Rf + 0.5 * gap
+  t50 = np.full(N, np.nan)
+  for i in range(N):
+      after = (t > args.t_on + args.rate_window_min * 60.0) & (rateB[:, i] >= target[i])
+      if after.any():
+          t50[i] = t[np.argmax(after)] - args.t_on
+  end_B = runs[B]["progress_m"][steady].sum(0) / (steady.sum() * cycle_s / 60.0)
+  recovered = np.where(gap > 1e-6, (end_B - Rf) / gap, np.nan)
+  res = {
+      "checkpoint": args.checkpoint, "factor": args.factor, "t_on": args.t_on, "minutes": args.minutes, "num_envs": N, "arms": args.arms,
+      "updater_cfg": C.to_dict(ucfg), "rate_window_min": args.rate_window_min, "steady_min": args.steady_min,
+      "R0_m_per_min": {"mean": float(R0.mean()), "std": float(R0.std())},
+      "Rf_m_per_min": {"mean": float(Rf.mean()), "std": float(Rf.std())},
+      "gap_m_per_min": {"mean": float(gap.mean()), "std": float(gap.std())},
+      "end_rate_adapting_m_per_min": {"mean": float(end_B.mean()), "std": float(end_B.std())},
+      "recovered_fraction_at_end": {"mean": float(np.nanmean(recovered)), "std": float(np.nanstd(recovered)), "n": int(np.sum(~np.isnan(recovered)))},
+      "T50_s": {"mean": float(np.nanmean(t50)) if np.any(~np.isnan(t50)) else None, "median": float(np.nanmedian(t50)) if np.any(~np.isnan(t50)) else None, "std": float(np.nanstd(t50)) if np.any(~np.isnan(t50)) else None, "n_reached": int(np.sum(~np.isnan(t50))), "per_env": t50.tolist()},
+      "falls": {A: float(np.nansum(runs[A]["falls"])), B: float(np.nansum(runs[B]["falls"]))},
+      "updates_B": float(np.nansum(runs[B]["updates"])), "kl_pi0_B_end": float(np.nanmean(runs[B]["kl_pi0"][-1])),
+      "label": "PRELIMINARY (one pi_0 seed, one factor)", "value": value,
+      "recoverable": bool(np.sum(~np.isnan(t50)) >= args.recoverable_frac * N),
+  }
+  json.dump(res, open(os.path.join(out_dir, "t50.json"), "w"), indent=1)
+  md = [f"# T50, {args.factor} on at {args.t_on:.0f} s, {N} deployments, {os.path.basename(args.checkpoint)} (PRELIMINARY)", "",
+        f"arms: frozen = {A}, adapting = {B} (adapting from the change; lr {ucfg.learning_rate}, kl weight {ucfg.kl_anchor_weight}, {ucfg.steps_per_batch} steps/batch)", "",
+        "| quantity | mean | std |", "|---|---|---|",
+        f"| R0 nominal rate [m/min] | {R0.mean():.2f} | {R0.std():.2f} |", f"| Rf frozen rate after change [m/min] | {Rf.mean():.2f} | {Rf.std():.2f} |",
+        f"| gap [m/min] | {gap.mean():.2f} | {gap.std():.2f} |", f"| adapting rate at the end [m/min] | {end_B.mean():.2f} | {end_B.std():.2f} |",
+        f"| recovered fraction of the gap at the end | {np.nanmean(recovered):.2f} | {np.nanstd(recovered):.2f} |",
+        f"| T50 [s] (n reached {int(np.sum(~np.isnan(t50)))}/{N}) | {np.nanmean(t50) if np.any(~np.isnan(t50)) else float('nan'):.1f} | {np.nanstd(t50) if np.any(~np.isnan(t50)) else float('nan'):.1f} |",
+        f"| falls frozen / adapting | {res['falls'][A]:.0f} | {res['falls'][B]:.0f} |", ""]
+  open(os.path.join(out_dir, "t50.md"), "w").write("\n".join(md))
+  print("\n".join(md))
+  try:
+      import matplotlib
 
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+      matplotlib.use("Agg")
+      import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(9, 4))
-    for name, r, c in ((A, rateA, "C0"), (B, rateB, "C1")):
-        ax.fill_between(t, np.nanpercentile(r, 10, 1), np.nanpercentile(r, 90, 1), color=c, alpha=0.2)
-        ax.plot(t, np.nanmean(r, 1), color=c, label=name)
-    ax.axhline(R0.mean(), color="k", ls=":", lw=0.8, label="R0")
-    ax.axhline(target.mean(), color="r", ls="--", lw=0.8, label="Rf + gap/2")
-    ax.axvline(args.t_on, color="k", ls="--")
-    ax.set_xlabel("robot time [s]")
-    ax.set_ylabel(f"progress rate [m/min], {args.rate_window_min:.0f}-min window")
-    ax.legend()
-    ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(os.path.join(out_dir, "t50.png"), dpi=120)
-except Exception as e:  # noqa: BLE001
-    print("[t50] no plot:", e)
-print("[t50] wrote", out_dir)
+      fig, ax = plt.subplots(figsize=(9, 4))
+      for name, r, c in ((A, rateA, "C0"), (B, rateB, "C1")):
+          ax.fill_between(t, np.nanpercentile(r, 10, 1), np.nanpercentile(r, 90, 1), color=c, alpha=0.2)
+          ax.plot(t, np.nanmean(r, 1), color=c, label=name)
+      ax.axhline(R0.mean(), color="k", ls=":", lw=0.8, label="R0")
+      ax.axhline(target.mean(), color="r", ls="--", lw=0.8, label="Rf + gap/2")
+      ax.axvline(args.t_on, color="k", ls="--")
+      ax.set_xlabel("robot time [s]")
+      ax.set_ylabel(f"progress rate [m/min], {args.rate_window_min:.0f}-min window")
+      ax.legend()
+      ax.grid(alpha=0.3)
+      fig.tight_layout()
+      fig.savefig(os.path.join(out_dir, "t50.png"), dpi=120)
+  except Exception as e:  # noqa: BLE001
+      print("[t50] no plot:", e)
+  print("[t50] wrote", out_dir)
+  return res
+
+
+for value in values:
+    sub = out_root if len(values) == 1 else os.path.join(out_root, f"value_{value:g}")
+    os.makedirs(sub, exist_ok=True)
+    print(f"[t50] ===== {args.factor} = {value} =====", flush=True)
+    res = analyse(run_value(value, sub), value, sub)
+    attempts.append({"value": value, "recoverable": res["recoverable"], "T50_s": res["T50_s"], "gap_m_per_min": res["gap_m_per_min"], "recovered_fraction_at_end": res["recovered_fraction_at_end"], "out_dir": sub})
+    if res["recoverable"]:
+        break
+json.dump({"factor": args.factor, "values_tried": values[: len(attempts)], "attempts": attempts, "first_recoverable_value": next((a["value"] for a in attempts if a["recoverable"]), None), "recoverable_frac_rule": args.recoverable_frac}, open(os.path.join(out_root, "r3_attempts.json"), "w"), indent=1)
+print("[t50] R3 attempts:", json.dumps(attempts, indent=1, default=str))
 env.close()
 app.close()

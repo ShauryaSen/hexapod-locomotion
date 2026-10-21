@@ -71,6 +71,41 @@ class ConvergenceStop:
         self.count[mask] = 0
 
 
+class Baseliner:
+    """R5 per-deployment baseline of the (log) residual: collects ``n`` cycles at the start and after every
+    adaptation episode (``restart(mask)``); while collecting, z is NaN (no alarms). ``sigma`` is the global nominal
+    sd; the per-deployment mean replaces the global mean once measured."""
+
+    def __init__(self, n_env: int, n_cycles: int, sigma: float, mu_global: float, device):
+        self.n = n_cycles
+        self.sigma = sigma
+        self.mu = torch.full((n_env,), float(mu_global), device=device)
+        self.count = torch.zeros(n_env, device=device)
+        self.sum = torch.zeros(n_env, device=device)
+        self.collecting = torch.ones(n_env, dtype=torch.bool, device=device) if n_cycles > 0 else torch.zeros(n_env, dtype=torch.bool, device=device)
+        self.n_baselines = torch.zeros(n_env, dtype=torch.long, device=device)
+
+    def restart(self, mask: torch.Tensor):
+        if self.n <= 0:
+            return
+        self.collecting |= mask
+        self.count = torch.where(mask, torch.zeros_like(self.count), self.count)
+        self.sum = torch.where(mask, torch.zeros_like(self.sum), self.sum)
+
+    def step(self, x: torch.Tensor) -> torch.Tensor:
+        """``x`` = transformed per-cycle residual (log r); returns z (NaN while collecting or x is NaN)."""
+        valid = ~torch.isnan(x)
+        take = self.collecting & valid
+        self.sum = torch.where(take, self.sum + x, self.sum)
+        self.count = torch.where(take, self.count + 1, self.count)
+        done = self.collecting & (self.count >= self.n)
+        self.mu = torch.where(done, self.sum / self.count.clamp_min(1), self.mu)
+        self.n_baselines += done.long()
+        self.collecting = self.collecting & ~done
+        z = (x - self.mu) / self.sigma
+        return torch.where(self.collecting | ~valid, torch.full_like(z, float("nan")), z)
+
+
 # ---- offline calibration ----------------------------------------------------------------------------------------
 
 

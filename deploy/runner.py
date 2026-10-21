@@ -16,6 +16,7 @@ import torch
 
 from .arms import Arm
 from .cfg import DeployCfg
+from .detectors import Baseliner
 from .ensemble import DynamicsEnsemble
 from .envutil import forward_speed, pin_commands, policy_obs, reset_in_place
 from .schedule import ScheduleApplier
@@ -24,8 +25,9 @@ from .updater import KLAnchoredPPO
 
 
 class DeploymentRunner:
-    def __init__(self, env, cfg: DeployCfg, updater: KLAnchoredPPO, arm: Arm, applier: ScheduleApplier, ensemble: DynamicsEnsemble | None = None, pi0_critic: dict | None = None, log=print):
+    def __init__(self, env, cfg: DeployCfg, updater: KLAnchoredPPO, arm: Arm, applier: ScheduleApplier, ensemble: DynamicsEnsemble | None = None, pi0_critic: dict | None = None, log=print, preproc=None):
         self.env, self.cfg, self.updater, self.arm, self.applier, self.ensemble = env, cfg, updater, arm, applier, ensemble
+        self.preproc = preproc  # R1: RMA history encoder (frozen) -> policy input = cat(obs, z); None = plain policy
         self.pi0_critic = pi0_critic
         self.log = log
         self.n = env.num_envs
@@ -40,6 +42,13 @@ class DeploymentRunner:
         self.events: list[dict] = []
         self.ids = torch.arange(self.n, device=self.dev)
         self.calibrated = ensemble is not None and ensemble.is_calibrated()
+        # R5 per-deployment baseline (log residual); 0 cycles = global calibration only
+        nb = int(getattr(arm.det_cfg, "baseline_cycles", 0))
+        self.baseliner = None
+        if self.calibrated and nb > 0:
+            mu_g, sd_g = (float(ensemble.nominal_mu_log), float(ensemble.nominal_sigma_log)) if ensemble.cfg.residual_transform == "log" else (float(ensemble.nominal_mu), float(ensemble.nominal_sigma))
+            self.baseliner = Baseliner(self.n, nb, sd_g, mu_g, self.dev)
+
 
     def run(self, minutes: float, progress_every_min: float = 1.0) -> dict:
         env, cfg, upd, arm = self.env, self.cfg, self.updater, self.arm
@@ -64,14 +73,16 @@ class DeploymentRunner:
                 self.events.append({"env": i, "t_s": t, "factor": e.factor, "on": e.on})
             recovering = recover_left > 0
             explore = (adapt if cfg.explore_only_when_adapting else torch.ones_like(adapt)) & ~recovering
-            act, logp, value, mean, std = upd.act(obs, explore, self.gen)
+            pobs = self.preproc(obs) if self.preproc is not None else obs
+            act, logp, value, mean, std = upd.act(pobs, explore, self.gen)
             act = torch.where(recovering.unsqueeze(1), torch.zeros_like(act), act)  # hold the default pose
             obs_next, rew, term, trunc, _ = env.step(act)
             obs_next = obs_next["policy"]
             fell = term.bool()
             v = forward_speed(env)
             walking = ~recovering & ~fell
-            acc["prog"] += torch.where(walking, v * dt, zeros)
+            v_prog = v.clamp_max(cfg.cmd_speed) if cfg.cap_progress_at_cmd else v  # R4: capped at the command
+            acc["prog"] += torch.where(walking, v_prog * dt, zeros)
             acc["track"] += torch.where(walking, (v - cfg.cmd_speed).abs(), zeros)
             acc["track_n"] += walking.float()
             acc["rew"] += rew
@@ -83,24 +94,28 @@ class DeploymentRunner:
                 acc["dis"] += torch.where(walking, dis, zeros)
                 acc["res_n"] += walking.float()
             store_mask = adapt & ~recovering
-            upd.store(store_mask, obs, act, logp, value, rew, fell, mean, std)
+            upd.store(store_mask, pobs, act, logp, value, rew, fell, mean, std)
             if bool(fell.any()):
                 # env.step already reset the fallen robots at their cells (random command): pin and re-observe
                 recover_left = torch.where(fell, torch.full_like(recover_left, self.recovery_steps), recover_left)
                 pin_commands(env, cfg.cmd_speed)
                 obs_next = policy_obs(env)
             if self.repo_steps and (step + 1) % self.repo_steps == 0:
-                upd.truncate(store_mask, obs_next)
+                upd.truncate(store_mask, self._peek(obs_next))
                 reset_in_place(env, self.ids, cfg.cmd_speed)
                 obs_next = policy_obs(env)
                 acc["repos"] += 1.0
-            updated = upd.maybe_update(obs_next)
+                if self.preproc is not None:
+                    self.preproc.reset(torch.ones(n, dtype=torch.bool, device=dev))
+            if self.preproc is not None and bool(fell.any()):
+                self.preproc.reset(fell)
+            updated = upd.maybe_update(self._peek(obs_next))
             acc["updates"] += updated.float()
             recover_left = (recover_left - 1).clamp_min(0)
             obs = obs_next
             if (step + 1) % self.steps_per_cycle == 0:
                 t_end = (step + 1) * dt
-                adapt, pending_alarm, pending_reset = self._end_cycle(t_end, acc, adapt, pending_alarm, pending_reset, obs)
+                adapt, pending_alarm, pending_reset = self._end_cycle(t_end, acc, adapt, pending_alarm, pending_reset, self._peek(obs))
                 total_prog += acc["prog"]
                 total_falls += acc["falls"]
                 acc = self._new_acc()
@@ -111,6 +126,14 @@ class DeploymentRunner:
         wall = time.time() - t_wall
         return {"minutes": minutes, "steps": total_steps, "wall_s": wall, "steps_per_s": total_steps / wall, "progress_mean_m": total_prog.mean().item(), "progress_per_env_m": total_prog.tolist(), "falls_total": int(total_falls.sum().item()), "falls_per_env": total_falls.tolist(), "updates_per_env": upd.n_updates.tolist(), "events": self.events}
 
+    def _peek(self, obs):
+        """Policy input for a next-obs value function without advancing the history buffer."""
+        if self.preproc is None:
+            return obs
+        hist = torch.cat([self.preproc.hist[:, 1:], obs.unsqueeze(1)], dim=1)
+        with torch.no_grad():
+            return torch.cat([obs, self.preproc.encoder(hist)], dim=-1)
+
     def _new_acc(self):
         z = lambda: torch.zeros(self.n, device=self.dev)
         return {k: z() for k in ("prog", "track", "track_n", "rew", "falls", "recov", "res", "dis", "res_n", "updates", "repos")}
@@ -120,7 +143,11 @@ class DeploymentRunner:
         nanv = torch.full((n,), float("nan"), device=self.dev)
         residual = torch.where(acc["res_n"] > 0, acc["res"] / acc["res_n"].clamp_min(1), nanv) if self.ensemble is not None else nanv
         dis = torch.where(acc["res_n"] > 0, acc["dis"] / acc["res_n"].clamp_min(1), nanv) if self.ensemble is not None else nanv
-        z = self.ensemble.standardize(residual) if self.calibrated else nanv
+        if self.calibrated and self.baseliner is not None:
+            x = torch.log(residual.clamp_min(1e-12)) if self.ensemble.cfg.residual_transform == "log" else residual
+            z = self.baseliner.step(x)
+        else:
+            z = self.ensemble.standardize(residual) if self.calibrated else nanv
         s.set("t_s", t_end)
         s.set("progress_m", acc["prog"])
         s.set("track_err", torch.where(acc["track_n"] > 0, acc["track"] / acc["track_n"].clamp_min(1), nanv))
@@ -140,8 +167,11 @@ class DeploymentRunner:
         s.set("motor_strength", self.applier.motor)
         s.set("friction", self.applier.friction)
         s.set("budget_used_min", self.arm.budget_used)
+        s.set("baseline_mu", self.baseliner.mu if self.baseliner is not None else nanv)
         s.commit()
         state = self.arm.cycle(t_end, z)
+        if self.baseliner is not None and getattr(self.arm, "rebaseline_on_stop", False) and bool(state["stopped"].any()):
+            self.baseliner.restart(state["stopped"])  # R5: re-measure the nominal level after every episode
         new_adapt = state["adapt"]
         ended = adapt & ~new_adapt
         if bool(ended.any()):

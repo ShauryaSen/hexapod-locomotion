@@ -19,7 +19,8 @@ from .cfg import ArmCfg, DetectorCfg, UpdaterCfg
 from .detectors import ConvergenceStop, Cusum, ThreeSigma
 from .schedule import Schedule
 
-ARM_NAMES = ("never", "always", "scheduled", "periodic_reset", "pause_hold", "three_sigma", "cusum", "triggered", "oracle")
+ARM_NAMES = ("never", "always", "scheduled", "periodic_reset", "pause_hold", "three_sigma", "cusum", "oracle")
+# "triggered" (ours = CUSUM on the ensemble residual) was dropped as a separate arm (decisions.md R5, 2026-10-21).
 
 
 class Arm:
@@ -36,6 +37,7 @@ class Arm:
         self.episodes = torch.zeros(n, dtype=torch.long, device=device)
         self.converge = ConvergenceStop(n, det_cfg, device) if self.uses_convergence_stop else None
         self._f = torch.zeros(n, dtype=torch.bool, device=device)
+        self.rebaseline_on_stop = self.uses_convergence_stop  # R5: detector arms re-measure the nominal level
 
     # ---- hooks for subclasses ---------------------------------------------------------------------------------
     def trigger(self, t_s: float, z: torch.Tensor) -> torch.Tensor:
@@ -151,7 +153,10 @@ class ThreeSigmaArm(Arm):
 
     def __init__(self, *a, **k):
         super().__init__(*a, **k)
-        self.det = ThreeSigma(self.n, self.det_cfg, self.device)
+        det_cfg = self.det_cfg
+        if self.cfg.three_sigma_consecutive is not None:
+            det_cfg = DetectorCfg(**{**det_cfg.__dict__, "three_sigma_consecutive": self.cfg.three_sigma_consecutive})
+        self.det = ThreeSigma(self.n, det_cfg, self.device)
 
     def trigger(self, t_s, z):
         alarm = self.det.step(z)
@@ -164,7 +169,8 @@ class CusumArm(Arm):
 
     def __init__(self, *a, cusum_h: float | None = None, **k):
         super().__init__(*a, **k)
-        self.det = Cusum(self.n, self.det_cfg, self.device, h=cusum_h)
+        h = cusum_h if cusum_h is not None else self.cfg.cusum_h
+        self.det = Cusum(self.n, self.det_cfg, self.device, h=h)
 
     def cycle(self, t_s, z):
         out = super().cycle(t_s, z)
@@ -175,13 +181,6 @@ class CusumArm(Arm):
         alarm = self.det.step(z)
         self.det.reset(self.adapting)  # no accumulation while adapting
         return alarm & ~self.adapting
-
-
-class Triggered(CusumArm):
-    """Ours. Same CUSUM input as the CUSUM baseline for now; kept separate so it can diverge (recalibrating
-    detector is the stretch goal, F1)."""
-
-    name = "triggered"
 
 
 class Oracle(Arm):
@@ -207,8 +206,21 @@ class Oracle(Arm):
         return start
 
 
+def arm_label(cfg: ArmCfg, det_cfg: DetectorCfg) -> str:
+    """Arm name with its knob (R6), e.g. scheduled(T=10), cusum(h=6.75), three_sigma(m=3)."""
+    if cfg.name in ("scheduled", "periodic_reset"):
+        return f"{cfg.name}(T={cfg.period_min:g})"
+    if cfg.name == "pause_hold":
+        return f"pause_hold(H={cfg.hold_min:g})"
+    if cfg.name == "cusum":
+        return f"cusum(h={(cfg.cusum_h if cfg.cusum_h is not None else det_cfg.cusum_h):g})"
+    if cfg.name == "three_sigma":
+        return f"three_sigma(m={cfg.three_sigma_consecutive if cfg.three_sigma_consecutive is not None else det_cfg.three_sigma_consecutive})"
+    return cfg.name
+
+
 def make_arm(name: str, n: int, cfg: ArmCfg, upd_cfg: UpdaterCfg, det_cfg: DetectorCfg, device, cycle_s: float, schedules=None, cusum_h: float | None = None) -> Arm:
-    cls = {"never": Never, "always": Always, "scheduled": Scheduled, "periodic_reset": PeriodicReset, "pause_hold": PauseHold, "three_sigma": ThreeSigmaArm, "cusum": CusumArm, "triggered": Triggered, "oracle": Oracle}[name]
-    if cls in (CusumArm, Triggered):
+    cls = {"never": Never, "always": Always, "scheduled": Scheduled, "periodic_reset": PeriodicReset, "pause_hold": PauseHold, "three_sigma": ThreeSigmaArm, "cusum": CusumArm, "oracle": Oracle}[name]
+    if cls is CusumArm:
         return cls(n, cfg, upd_cfg, det_cfg, device, cycle_s, schedules, cusum_h=cusum_h)
     return cls(n, cfg, upd_cfg, det_cfg, device, cycle_s, schedules)

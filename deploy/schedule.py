@@ -96,6 +96,7 @@ def generate_schedule(seed: int, cfg: ScheduleCfg, max_tries: int = 10000) -> Sc
         if cfg.require_recurrence and not s.has_recurrence():
             continue
         s.cfg["tries"] = _ + 1
+        s.cfg["split"] = "tune" if seed in cfg.tune_seeds else "test" if seed in cfg.test_seeds else "other"  # R2
         return s
     raise RuntimeError(f"no schedule satisfied the constraints in {max_tries} draws (seed {seed})")
 

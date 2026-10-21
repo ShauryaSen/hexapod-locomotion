@@ -234,11 +234,37 @@ class BatchedAdam:
         return {"m": [m.cpu() for m in self.m], "v": [v.cpu() for v in self.v], "t": self.t.cpu(), "lr": self.lr.cpu()}
 
 
+class HistoryEncoderPreproc:
+    """R1 (ASSUMED format, stage 3 not built yet): an RMA student checkpoint carries, besides the base policy's
+    ``actor_state_dict`` / ``critic_state_dict`` (whose input is obs + z), a frozen history encoder phi under
+    ``ck["rma_student"] = {"encoder": nn.Module (B, H, obs) -> (B, z_dim), "history_len": H}``. The encoder is
+    shared and frozen (only the base policy is fine-tuned, R1); this preprocessor keeps a rolling obs history per
+    deployment and returns cat(obs, z) for the stacked base policy."""
+
+    def __init__(self, encoder: nn.Module, history_len: int, n: int, obs_dim: int, device):
+        self.encoder = encoder.to(device).eval()
+        for p in self.encoder.parameters():
+            p.requires_grad_(False)
+        self.H = history_len
+        self.hist = torch.zeros(n, history_len, obs_dim, device=device)
+
+    @torch.no_grad()
+    def __call__(self, obs: torch.Tensor) -> torch.Tensor:
+        self.hist = torch.cat([self.hist[:, 1:], obs.unsqueeze(1)], dim=1)
+        z = self.encoder(self.hist)
+        return torch.cat([obs, z], dim=-1)
+
+    def reset(self, mask: torch.Tensor):
+        self.hist[mask] = 0.0
+
+
 def load_rsl_rl_checkpoint(path: str, device) -> dict:
-    """``{'actor': sd, 'critic': sd, 'hidden_dims': [...], 'obs_dim': int, 'act_dim': int}`` from a model_*.pt."""
+    """``{'actor': sd, 'critic': sd, 'hidden_dims': [...], 'obs_dim': int, 'act_dim': int, 'rma_student': dict|None}``
+    from a model_*.pt. ``obs_dim`` is the base policy's input (obs + z for an RMA student)."""
     ck = torch.load(path, map_location=device, weights_only=False)
     actor = ck["actor_state_dict"] if "actor_state_dict" in ck else ck
     critic = ck.get("critic_state_dict")
+    rma = ck.get("rma_student")
     layers = sorted({int(k.split(".")[1]) for k in actor if k.startswith("mlp.") and k.endswith(".weight")})
     hidden = [actor[f"mlp.{k}.weight"].shape[0] for k in layers[:-1]]
     return {
@@ -248,7 +274,16 @@ def load_rsl_rl_checkpoint(path: str, device) -> dict:
         "obs_dim": actor[f"mlp.{layers[0]}.weight"].shape[1],
         "act_dim": actor[f"mlp.{layers[-1]}.weight"].shape[0],
         "iter": ck.get("iter"),
+        "rma_student": rma,
     }
+
+
+def build_preproc(info: dict, n: int, env_obs_dim: int, device):
+    """R1: a HistoryEncoderPreproc for an RMA student checkpoint, else None (plain stage-1 policy)."""
+    rma = info.get("rma_student")
+    if rma is None:
+        return None
+    return HistoryEncoderPreproc(rma["encoder"], int(rma["history_len"]), n, env_obs_dim, device)
 
 
 def build_from_checkpoint(path: str, n: int, device) -> tuple[BatchedGaussianActor, BatchedCritic, dict]:

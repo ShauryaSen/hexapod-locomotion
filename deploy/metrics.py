@@ -73,11 +73,14 @@ def deployment_metrics(arrays: dict[str, np.ndarray], i: int, schedule: Schedule
         for ta in alarm_times:
             if not np.any((changes <= ta) & (changes > ta - window_s)):
                 fa += 1
+        # R4: delay = time from the change to the first fine-tuning cycle (adapting) within the window; 0 for an arm
+        # that is already adapting at the change (always-on)
+        adapt_times = t[adapting]
         delays, missed = [], 0
         for tc in changes:
-            after = alarm_times[(alarm_times >= tc) & (alarm_times <= tc + window_s)]
+            after = adapt_times[(adapt_times >= tc) & (adapt_times <= tc + window_s)]
             if len(after):
-                delays.append(after[0] - tc)
+                delays.append(max(0.0, after[0] - tc - cycle_s))
             else:
                 missed += 1
         # segments: post-change = within one window after any change; recurrence = within one window after a
