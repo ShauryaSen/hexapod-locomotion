@@ -145,7 +145,7 @@ if args.dump_tile:
     step = max(sl.shape[0] // 25, 1)
     print(f"[audit] tile {name} L{lvl}: origin {np.round(o, 3).tolist()}, {sl.shape} cells, every {step}-th cell, mm relative to origin z; rows = x (down), cols = y (right, robots walk towards lower columns)")
     for i in range(0, sl.shape[0], step):
-        print(" ".join(f"{int(round((v - o[2]) * 1000)):4d}" for v in sl[i, ::step]))
+        print(" ".join(("   ." if np.isnan(v) else f"{int(round((v - o[2]) * 1000)):4d}") for v in sl[i, ::step]))
 md = ["| type | level | max abs z [m] | p95 cell step [m] | max cell step [m] | max slope over 0.1 m [deg] | p95 height [m] | p5 height [m] |", "|---|---|---|---|---|---|---|---|"]
 for r in rows_tbl:
     md.append(f"| {r['type']} | {r['level']} | {r['max_abs_z_m']:.4f} | {r['p95_dz_m']:.4f} | {r['max_dz_m']:.4f} | {r['max_slope_deg']:.1f} | {r['p95_height_m']:.4f} | {r['p5_height_m']:.4f} |")
