@@ -27,6 +27,7 @@ parser.add_argument("--steps", type=int, default=400)
 parser.add_argument("--levels", type=int, nargs="+", default=None, help="rough env: terrain levels to spawn on")
 parser.add_argument("--dr", action="store_true")
 parser.add_argument("--out", required=True)
+parser.add_argument("--camera", default="side", choices=["side", "behind", "high"], help="rough env static camera: side (1 m to +x), behind (0.6 m behind, 0.3 m up, looking along -y), high (3 m back, 2 m up)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 args.enable_cameras = True
@@ -68,8 +69,12 @@ if env_cfg.terrain.terrain_type == "generator" and args.levels:
     ox = (args.levels[0] + 0.5) * g.size[0] - g.num_rows * g.size[0] / 2
     oy = (1 + 0.5) * g.size[1] - g.num_cols * g.size[1] / 2
     env_cfg.viewer.origin_type = "world"
-    env_cfg.viewer.eye = (ox + 1.0, oy - 1.0, 0.45)
-    env_cfg.viewer.lookat = (ox, oy - 1.0, 0.05)
+    if args.camera == "side":
+        env_cfg.viewer.eye, env_cfg.viewer.lookat = (ox + 1.0, oy - 1.0, 0.45), (ox, oy - 1.0, 0.05)
+    elif args.camera == "behind":  # the robot walks along -y, away from the camera
+        env_cfg.viewer.eye, env_cfg.viewer.lookat = (ox, oy + 0.6, 0.3), (ox, oy - 0.8, 0.0)
+    else:
+        env_cfg.viewer.eye, env_cfg.viewer.lookat = (ox, oy + 3.0, 2.0), (ox, oy - 1.2, 0.0)
     print(f"[record_video] camera at {env_cfg.viewer.eye} looking at {env_cfg.viewer.lookat} (cell origin {ox:.2f}, {oy:.2f})")
 env = gym.make(args.task, cfg=env_cfg, render_mode="rgb_array")
 raw = env.unwrapped
