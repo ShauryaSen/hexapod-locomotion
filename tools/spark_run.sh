@@ -35,8 +35,20 @@ for attempt in $(seq 1 "$max_attempts"); do
     if grep -q "AppLauncher initialization complete" "$log"; then started=1; break; fi
   done
   if [ "$started" = 1 ]; then
-    # past the crash window; the silent exit (if any) comes within seconds, otherwise the command runs to the end
+    # past the crash window; the silent exit (if any) comes within seconds, otherwise the command runs to the end.
+    # Stall guard: if the log has not grown for SPARK_RUN_STALL_S (default 1800 s; 0 disables) the instance is
+    # treated as hung in physics start (seen under load) and retried.
+    stall=${SPARK_RUN_STALL_S:-1800}
+    stalled=0
+    while kill -0 "$pid" 2>/dev/null; do
+      sleep 20
+      if [ "$stall" -gt 0 ] && [ $(( $(date +%s) - $(stat -c %Y "$log") )) -gt "$stall" ]; then
+        echo "[spark_run] attempt $attempt: no log output for ${stall}s, stopping container $tag" >> "$log"
+        stop_tagged "$tag"; sleep 5; kill "$pid" 2>/dev/null; stalled=1; break
+      fi
+    done
     wait "$pid"; rc=$?
+    if [ "$stalled" = 1 ]; then mv "$log" "$log.attempt$attempt"; sleep 30; continue; fi
     if [ "$rc" != 0 ] && grep -q "There was an error running python" "$log" && ! grep -q "Traceback (most recent call last)" "$log"; then
       echo "[spark_run] attempt $attempt: silent python exit after AppLauncher init" >> "$log"
     else
