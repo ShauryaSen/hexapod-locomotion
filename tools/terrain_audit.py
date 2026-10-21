@@ -79,6 +79,27 @@ ax.set_ylabel("x [m] (rows = curriculum levels)")
 ax.set_title(f"HEXAPOD_TERRAINS_CFG: {cfg.num_rows} levels x {cfg.num_cols} columns, {cfg.size[0]} m tiles, border {cfg.border_width} m, step cap {args.step_cap or STEP_CAP} m")
 fig.savefig(os.path.join(args.out, "terrain_heightmap.png"), dpi=150, bbox_inches="tight")
 
+# ---- exact per-tile heights by vertical ray casts on the cropped mesh (the vertex binning above is only for the
+# overview picture: box meshes have vertices at corners only, so nearest-fill distorts stairs and boxes)
+F_centroid = V[mesh.faces].mean(axis=1)
+
+
+def tile_heights(o, n=100):
+    xs, ys = o[0] - size / 2, o[1] + -size / 2
+    sel = (F_centroid[:, 0] >= xs - 0.1) & (F_centroid[:, 0] <= xs + size + 0.1) & (F_centroid[:, 1] >= ys - 0.1) & (F_centroid[:, 1] <= ys + size + 0.1)
+    sub = mesh.submesh([np.where(sel)[0]], append=True)
+    cx = xs + (np.arange(n) + 0.5) * size / n
+    cy = ys + (np.arange(n) + 0.5) * size / n
+    gx, gy = np.meshgrid(cx, cy, indexing="ij")
+    orig = np.stack([gx.ravel(), gy.ravel(), np.full(n * n, 5.0)], axis=1)
+    dirs = np.tile([0.0, 0.0, -1.0], (n * n, 1))
+    loc, idx_ray, _ = sub.ray.intersects_location(orig, dirs, multiple_hits=True)
+    H2 = np.full(n * n, np.nan)
+    np.maximum.at(H2, idx_ray, loc[:, 2]) if len(idx_ray) else None
+    H2[np.isinf(H2)] = np.nan
+    return H2.reshape(n, n), size / n
+
+
 # ---- per tile stats and cross-sections
 size = cfg.size[0]
 first_col = {}
@@ -91,11 +112,12 @@ for ti, (name, c) in enumerate(first_col.items()):
         o = origins[lvl, c]
         xs, xe = o[0] - size / 2, o[0] + size / 2
         ys, ye = o[1] - size / 2, o[1] + size / 2
-        sl = Hf[int((xs - x0) / res) : int((xe - x0) / res), int((ys - y0) / res) : int((ye - y0) / res)]
+        sl, res_t = tile_heights(o)
+        sl = np.where(np.isnan(sl), np.nanmedian(sl), sl)
         z = sl - np.median(sl)
         dz = np.maximum(np.abs(np.diff(sl, axis=0)).max(initial=0), 0)
         dz_all = np.concatenate([np.abs(np.diff(sl, axis=0)).ravel(), np.abs(np.diff(sl, axis=1)).ravel()])
-        k = int(0.1 / res)
+        k = int(0.1 / res_t)
         slope = max(np.abs(sl[k:] - sl[:-k]).max() / 0.1, np.abs(sl[:, k:] - sl[:, :-k]).max() / 0.1)
         rows_tbl.append({
             "type": name, "level": lvl, "max_abs_z_m": float(np.abs(z).max()), "p95_dz_m": float(np.percentile(dz_all, 95)),
@@ -105,7 +127,7 @@ for ti, (name, c) in enumerate(first_col.items()):
         if lvl in (5, 9):
             ax = axes[ti, 0 if lvl == 5 else 1]
             mid = sl.shape[0] // 2
-            ax.plot(np.arange(sl.shape[1]) * res - size / 2, sl[mid] - o[2], lw=0.8)
+            ax.plot((np.arange(sl.shape[1]) + 0.5) * res_t - size / 2, sl[mid] - o[2], lw=0.8)
             ax.set_title(f"{name} L{lvl}: section along y through the tile centre (z relative to origin)", fontsize=8)
             ax.set_ylabel("z [m]")
             ax.grid(alpha=0.3)
@@ -119,7 +141,7 @@ if args.dump_tile:
     c = first_col[name]
     o = origins[lvl, c]
     xs, ys = o[0] - size / 2, o[1] - size / 2
-    sl = Hf[int((xs - x0) / res) : int((xs + size - x0) / res), int((ys - y0) / res) : int((ys + size - y0) / res)]
+    sl, _ = tile_heights(o)
     step = max(sl.shape[0] // 25, 1)
     print(f"[audit] tile {name} L{lvl}: origin {np.round(o, 3).tolist()}, {sl.shape} cells, every {step}-th cell, mm relative to origin z; rows = x (down), cols = y (right, robots walk towards lower columns)")
     for i in range(0, sl.shape[0], step):
