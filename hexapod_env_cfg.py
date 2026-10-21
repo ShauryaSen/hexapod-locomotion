@@ -5,52 +5,44 @@
 
 from isaaclab_physx.physics import PhysxCfg
 
-import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg
 from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
-from isaaclab.managers import EventTermCfg as EventTerm
-from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils.configclass import configclass
 
-##
-# Pre-defined configs
-##
-
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
-
 from .hexapod_robot_cfg import HEXAPOD_CFG  # isort: skip
+from .hexapod_terrains_cfg import HEXAPOD_TERRAINS_CFG  # isort: skip
 
 
 @configclass
-class EventCfg:
-    """Configuration for randomization."""
+class DomainRandCfg:
+    """Per-env domain randomization, applied by the env itself (not the event manager) so the true values are known
+    and can be exposed as the privileged observation ``(delta_mass_kg, mu_static, motor_strength)``.
 
-    physics_material = EventTerm(
-        func=mdp.randomize_rigid_body_material,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
-            "restitution_range": (0.0, 0.0),
-            "num_buckets": 64,
-        },
-    )
+    Ranges follow decisions.md D1-D3 (status *lean*): friction 0.5-1.25, mass +-0.75 kg, motor strength 0.8-1.2.
+    """
 
-    add_base_mass = EventTerm(
-        func=mdp.randomize_rigid_body_mass,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="body"),
-            "mass_distribution_params": (-0.5, 0.5),
-            "operation": "add",
-        },
-    )
+    enabled: bool = True
+    """Sample new values for every env at every episode reset (and at startup). False = nominal values."""
+
+    friction_static_range: tuple[float, float] = (0.5, 1.25)
+    """Static friction of every collision shape of the robot, U(lo, hi) per env. The ground has mu = 1.0 and the
+    combine mode is multiply, so this is the effective robot-ground friction."""
+    friction_dynamic_ratio: float = 0.75
+    """Dynamic friction = static * this ratio (default choice, not in decisions.md: the old fixed material used
+    0.8 / 0.6 = 0.75)."""
+    restitution: float = 0.0
+
+    mass_add_range_kg: tuple[float, float] = (-0.75, 0.75)
+    """Added to the mass of the ``body`` link, U(lo, hi) per env; inertia scaled with the mass ratio."""
+
+    motor_strength_range: tuple[float, float] = (0.8, 1.2)
+    """Motor strength s ~ U(lo, hi) per env: stiffness, damping and the effort limit of all joints are scaled by s,
+    so the PD torque is exactly s times the nominal one (decisions.md D2)."""
 
 
 @configclass
@@ -95,13 +87,28 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=4.0, replicate_physics=True)
 
-    # events
-    events: EventCfg = EventCfg()
+    # events: none. Friction / mass / motor-strength randomization is done by the env (see ``dr``) so that the
+    # sampled values are known per env (privileged observation) and can be set at runtime.
+    events = None
+
+    # domain randomization (decisions.md D1-D3)
+    dr: DomainRandCfg = DomainRandCfg()
 
     # robot
     robot: ArticulationCfg = HEXAPOD_CFG.replace(prim_path="/World/envs/env_.*/Robot")
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/.*", history_length=3, update_period=0.005, track_air_time=True
+    )
+
+    # perceptive variant: height scanner appended to the observation (187 values). Off = blind (decisions.md P1).
+    perceptive: bool = False
+    height_scanner = RayCasterCfg(
+        prim_path="/World/envs/env_.*/Robot/body",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
     )
 
     # commands: at each reset, x/y velocity and yaw rate are sampled uniformly in [-max, max]
@@ -113,11 +120,31 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # club's forward axis is -y), x = 0. Used with the behavior-cloned tripod, whose teacher only walks forward/back.
     command_forward_only: bool = False
     command_lin_vel_min: float = 0.0
+    command_backward_fraction: float = 0.5
+    """Fraction of forward-only episodes that walk backward (+y). 0.5 was the behaviour before this field existed."""
+
+    # Command curriculum (speed sweep, decisions.md P9): command_lin_vel_max starts at ``command_curriculum_start``
+    # and is raised by ``command_curriculum_step`` whenever, over the last ``command_curriculum_window_episodes``
+    # episodes whose command was in the top bucket [max - step, max], the success rate (success_eval definition)
+    # is >= ``command_curriculum_success``. Capped at ``command_curriculum_max``. Logged as Curriculum/command_lin_vel_max.
+    command_curriculum: bool = False
+    command_curriculum_start: float = 0.15
+    command_curriculum_step: float = 0.05
+    command_curriculum_max: float = 0.4
+    command_curriculum_success: float = 0.8
+    command_curriculum_window_episodes: int = 256
+    """Default choice (not in the brief, which says "last 20 iterations"): 20 iterations x 24 steps is 9.6 s, less
+    than one 20 s episode, so the window is counted in finished top-bucket episodes instead."""
+
     # Gait clock: when enabled, [sin, cos] of a phase with period gait_period_s is appended to the observation
     # (observation_space += 2) and advances every step. The behavior-cloned policy needs it: the teacher gait is a
     # function of this phase, and a memoryless MLP cannot keep time on its own from a standing start.
     gait_clock_enabled: bool = False
     gait_period_s: float = 0.8
+
+    # Reset spreading: on a full reset, episode_length_buf is randomized so training envs do not all reset
+    # together. The eval suite turns this off so every env runs a full episode.
+    spread_resets: bool = True
 
     # velocity-tracking tolerance: reward = exp(-error^2 / sigma^2) with sigma = ratio * max command.
     # ANYmal uses commands up to 1.0 with sigma = 0.5 (the hard-coded 0.25 = 0.5^2), i.e. ratio 0.5.
@@ -145,25 +172,36 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # Same weight as Isaac Lab's Cassie rough config (-200 * step_dt = -4 per termination).
     termination_reward_scale = -200.0
 
-    # success criteria — episode success_rate = per-env binary check that the *episode-mean*
-    # error stayed below both thresholds, mean-reduced across resetting envs.
-    # Thresholds are ratio * max command; ANYmal's 0.5 m/s and 0.4 rad/s at max 1.0 give these ratios.
+    # Success (decisions.md P3), logged as Metrics/success_eval: the episode reached time-out (no fall) AND
+    # | episode-mean speed along the command direction - |command| | < success_speed_tol_ratio * |command|.
+    success_speed_tol_ratio: float = 0.25
+    success_min_cmd_ratio: float = 0.1
+    """Default choice: for commands below this fraction of command_lin_vel_max (the same "moving" threshold the
+    air-time reward uses) the tolerance is computed against that floor instead of |command|, so a zero command
+    does not make the test degenerate."""
+
+    # Old success definition kept for comparison, logged as Metrics/success_rate_old: per-env binary check that
+    # the episode-mean XY velocity error norm and yaw error stayed below ratio * max command. It counts falls as
+    # successes and scales with the max command (that is why P3 replaced it).
     vel_xy_success_ratio: float = 0.5
-    """Threshold on the per-episode mean XY velocity error norm, as a fraction of command_lin_vel_max."""
     vel_yaw_success_ratio: float = 0.4
-    """Threshold on the per-episode mean yaw velocity error, as a fraction of command_yaw_rate_max."""
+
+    # Terrain curriculum (decisions.md P2). Only active when the terrain is a generator with curriculum rows.
+    terrain_curriculum: bool = False
+    curriculum_move_down_speed_ratio: float = 0.5
+    """move_down when the episode-mean speed along the command is below this fraction of |command| (or a fall)."""
 
 
 @configclass
 class HexapodRoughEnvCfg(HexapodFlatEnvCfg):
-    # env
-    observation_space = 235
+    """Blind rough-terrain variant (decisions.md P1/P2): scaled terrain tiles with a 10-level curriculum, everyone
+    starts at level 0, no height scanner (observation 66 + clock)."""
 
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="generator",
-        terrain_generator=ROUGH_TERRAINS_CFG,
-        max_init_terrain_level=9,
+        terrain_generator=HEXAPOD_TERRAINS_CFG,
+        max_init_terrain_level=0,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
@@ -177,16 +215,11 @@ class HexapodRoughEnvCfg(HexapodFlatEnvCfg):
         ),
         debug_vis=False,
     )
+    # env origins come from the terrain tiles (2 m); env_spacing only places the cloned prims before the first reset
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=2.0, replicate_physics=True)
 
-    # we add a height scanner for perceptive locomotion
-    height_scanner = RayCasterCfg(
-        prim_path="/World/envs/env_.*/Robot/body",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        ray_alignment="yaw",
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
-        debug_vis=False,
-        mesh_prim_paths=["/World/ground"],
-    )
+    terrain_curriculum: bool = True
+    perceptive: bool = False
 
     # reward scales (override from flat config)
     flat_orientation_reward_scale = 0.0

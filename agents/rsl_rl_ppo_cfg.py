@@ -14,6 +14,8 @@ class HexapodFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     max_iterations = 500
     save_interval = 50
     experiment_name = "hexapod_flat_direct"
+    # the env also returns a "privileged" group (true DR values); plain PPO uses only "policy" for actor and critic
+    obs_groups = {"actor": ["policy"], "critic": ["policy"]}
     actor = RslRlMLPModelCfg(
         hidden_dims=[128, 128, 128],
         activation="elu",
@@ -47,6 +49,7 @@ class HexapodRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     max_iterations = 1500
     save_interval = 50
     experiment_name = "hexapod_rough_direct"
+    obs_groups = {"actor": ["policy"], "critic": ["policy"]}
     actor = RslRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
