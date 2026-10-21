@@ -41,6 +41,7 @@ parser.add_argument("--task", default="Hexapod-Flat-Direct-v0")
 parser.add_argument("--checkpoint", default=None)
 parser.add_argument("--run_dir", default=None, help="evaluate every model_*.pt in this directory")
 parser.add_argument("--latest_only", action="store_true", help="with --run_dir: only the highest-numbered checkpoint")
+parser.add_argument("--every", type=int, default=1, help="with --run_dir: keep every N-th checkpoint plus the last")
 parser.add_argument("--num_envs", type=int, default=512, help="envs per batch")
 parser.add_argument("--robots_per_cell", type=int, default=16)
 parser.add_argument("--nominal_only", action="store_true", help="DR grid = nominal only")
@@ -91,6 +92,8 @@ else:
     ckpts = sorted(glob.glob(os.path.join(run_dir, "model_*.pt")), key=lambda p: int(re.findall(r"model_(\d+)\.pt", p)[0]) if re.findall(r"model_(\d+)\.pt", p) else -1)
     if args.latest_only:
         ckpts = ckpts[-1:]
+    elif args.every > 1:
+        ckpts = ckpts[:: args.every] + ([ckpts[-1]] if (len(ckpts) - 1) % args.every else [])
 assert ckpts, "no checkpoints found"
 
 # ---- env cfg
