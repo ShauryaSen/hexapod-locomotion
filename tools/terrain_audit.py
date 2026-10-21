@@ -94,8 +94,9 @@ def tile_heights(o, n=100):
     orig = np.stack([gx.ravel(), gy.ravel(), np.full(n * n, 5.0)], axis=1)
     dirs = np.tile([0.0, 0.0, -1.0], (n * n, 1))
     loc, idx_ray, _ = sub.ray.intersects_location(orig, dirs, multiple_hits=True)
-    H2 = np.full(n * n, np.nan)
-    np.maximum.at(H2, idx_ray, loc[:, 2]) if len(idx_ray) else None
+    H2 = np.full(n * n, -np.inf)
+    if len(idx_ray):
+        np.maximum.at(H2, idx_ray, loc[:, 2])
     H2[np.isinf(H2)] = np.nan
     return H2.reshape(n, n), size / n
 
