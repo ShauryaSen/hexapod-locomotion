@@ -114,8 +114,10 @@ actor = nn.Sequential(*mods).to(dev).eval()
 
 ids = torch.arange(N, device=dev)
 if raw._has_terrain_levels and args.spread:
+    # every column (type) in turn, rows from --levels (default 0 3 6 9): 40 envs cover 10 columns x 4 levels
     n_rows, n_cols = raw._terrain.terrain_origins.shape[:2]
-    raw.set_terrain_cells(ids, ids % n_rows, (ids // n_rows) % n_cols)
+    rows = torch.tensor(args.levels if args.levels and args.levels != [0] else [0, 3, 6, 9], device=dev)
+    raw.set_terrain_cells(ids, rows[(ids // n_cols) % len(rows)], ids % n_cols)
 elif raw._has_terrain_levels and args.levels:
     n_cols = raw._terrain.terrain_origins.shape[1]
     levels = torch.tensor(args.levels, device=dev)[ids % len(args.levels)]
