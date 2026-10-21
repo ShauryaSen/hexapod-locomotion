@@ -27,7 +27,10 @@ parser.add_argument("--steps", type=int, default=400)
 parser.add_argument("--levels", type=int, nargs="+", default=None, help="rough env: terrain levels to spawn on")
 parser.add_argument("--dr", action="store_true")
 parser.add_argument("--out", required=True)
-parser.add_argument("--camera", default="side", choices=["side", "behind", "high"], help="rough env static camera: side (1 m to +x), behind (0.6 m behind, 0.3 m up, looking along -y), high (3 m back, 2 m up)")
+parser.add_argument("--camera", default="side", choices=["side", "behind", "high"], help="static camera relative to env 0's cell (rough) or tracking offsets (flat): side (1 m to +x), behind (0.6 m behind, 0.3 m up, looking along -y), high (3 m back, 2 m up)")
+parser.add_argument("--cam_eye", type=float, nargs=3, default=None, help="explicit world camera eye (overrides --camera)")
+parser.add_argument("--cam_lookat", type=float, nargs=3, default=None)
+parser.add_argument("--spread", action="store_true", help="rough env: spread the envs over every level and column (env i -> level i %% rows, column (i // rows) %% cols)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 args.enable_cameras = True
@@ -62,7 +65,9 @@ env_cfg.episode_length_s = args.steps / 50.0 + 5.0
 if env_cfg.terrain.terrain_type == "generator":
     env_cfg.terrain.max_init_terrain_level = None
 env_cfg.scene.env_spacing = 1.0 if env_cfg.terrain.terrain_type == "plane" else env_cfg.scene.env_spacing
-if env_cfg.terrain.terrain_type == "generator" and args.levels:
+if env_cfg.terrain.terrain_type == "generator" and (args.levels or args.spread):
+    if args.spread and not args.levels:
+        args.levels = [0]
     # headless recording: the viewport camera controller is not created, so the ViewerCfg must already point at the
     # terrain cell env 0 is pinned to (level = args.levels[0], column 1). Static side view of the first ~2 m of walking.
     g = env_cfg.terrain.terrain_generator
@@ -75,7 +80,17 @@ if env_cfg.terrain.terrain_type == "generator" and args.levels:
         env_cfg.viewer.eye, env_cfg.viewer.lookat = (ox, oy + 0.6, 0.3), (ox, oy - 0.8, 0.0)
     else:
         env_cfg.viewer.eye, env_cfg.viewer.lookat = (ox, oy + 3.0, 2.0), (ox, oy - 1.2, 0.0)
-    print(f"[record_video] camera at {env_cfg.viewer.eye} looking at {env_cfg.viewer.lookat} (cell origin {ox:.2f}, {oy:.2f})")
+elif env_cfg.terrain.terrain_type == "plane":
+    # flat: the viewer tracks env 0's robot (asset_root), so only the offsets change
+    if args.camera == "behind":
+        env_cfg.viewer.eye, env_cfg.viewer.lookat = (0.0, 0.6, 0.3), (0.0, -0.8, 0.0)
+    elif args.camera == "high":
+        env_cfg.viewer.eye, env_cfg.viewer.lookat = (0.0, 3.0, 2.0), (0.0, -1.2, 0.0)
+if args.cam_eye is not None:
+    env_cfg.viewer.origin_type = "world"
+    env_cfg.viewer.eye = tuple(args.cam_eye)
+    env_cfg.viewer.lookat = tuple(args.cam_lookat) if args.cam_lookat is not None else (0.0, 0.0, 0.0)
+print(f"[record_video] viewer {env_cfg.viewer.origin_type} eye {env_cfg.viewer.eye} lookat {env_cfg.viewer.lookat}")
 env = gym.make(args.task, cfg=env_cfg, render_mode="rgb_array")
 raw = env.unwrapped
 os.makedirs(args.out, exist_ok=True)
@@ -98,7 +113,10 @@ for i, li in enumerate(layers):
 actor = nn.Sequential(*mods).to(dev).eval()
 
 ids = torch.arange(N, device=dev)
-if raw._has_terrain_levels and args.levels:
+if raw._has_terrain_levels and args.spread:
+    n_rows, n_cols = raw._terrain.terrain_origins.shape[:2]
+    raw.set_terrain_cells(ids, ids % n_rows, (ids // n_rows) % n_cols)
+elif raw._has_terrain_levels and args.levels:
     n_cols = raw._terrain.terrain_origins.shape[1]
     levels = torch.tensor(args.levels, device=dev)[ids % len(args.levels)]
     types = (ids * 2 + 1) % n_cols  # odd columns: the next tile along -y is the same type
