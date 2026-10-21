@@ -109,7 +109,10 @@ n_windows = int(args.minutes / args.window + 1e-6)
 windows = []
 for w in range(n_windows):
     falls, rew_sum, verr_sum, v_sum, n = 0, 0.0, 0.0, 0.0, 0
-    for _ in range(steps_per_window):
+    steps_per_minute = int(60.0 / env.step_dt)
+    for i_step in range(steps_per_window):
+        if i_step and i_step % steps_per_minute == 0:
+            print(f"[long_run] window {w + 1}: {i_step // steps_per_minute} min, falls so far {falls}", flush=True)
         with torch.no_grad():
             act = actor(obs)
         obs_d, rew, terminated, truncated, _ = env.step(act)
