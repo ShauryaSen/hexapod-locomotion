@@ -50,6 +50,7 @@ parser.add_argument("--episode_s", type=float, default=20.0)
 parser.add_argument("--env_override", nargs="*", default=[], help="key=value env cfg overrides (applied after params)")
 parser.add_argument("--no_params", action="store_true", help="do not read <run>/params/env.yaml")
 parser.add_argument("--tag", default="", help="suffix for the output files")
+parser.add_argument("--per_column", action="store_true", help="one cell per terrain column (type name gets the column index) instead of per type")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -130,7 +131,10 @@ if env._has_terrain_levels:
     seen = {}
     for col in range(n_cols):
         seen.setdefault(type_names[col], []).append(col)
-    terrain_cells = [(lvl, name, cols) for lvl in args.levels for name, cols in seen.items()]
+    if args.per_column:
+        terrain_cells = [(lvl, f"{type_names[col]}#{col}", [col]) for lvl in args.levels for col in range(n_cols)]
+    else:
+        terrain_cells = [(lvl, name, cols) for lvl in args.levels for name, cols in seen.items()]
 else:
     terrain_cells = [(0, "flat", [0])]
 dr_cells = [(float(env_cfg.sim.physics_material.static_friction), 0.0, 1.0)] if args.nominal_only else list(itertools.product(FRICTIONS, MASSES, STRENGTHS))
