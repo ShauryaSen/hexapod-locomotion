@@ -222,6 +222,9 @@ class HexapodRoughEnvCfg(HexapodFlatEnvCfg):
 
     terrain_curriculum: bool = True
     perceptive: bool = False
+    step_cap: float | None = None
+    """Obstacle / grid block height cap [m] for this run; None keeps hexapod_terrains_cfg.STEP_CAP. The env rebuilds
+    the generator config with make_hexapod_terrains_cfg(step_cap) before the scene is created."""
 
     # reward scales (override from flat config)
     flat_orientation_reward_scale = 0.0

@@ -16,7 +16,7 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor, RayCaster
 
 from .hexapod_env_cfg import HexapodFlatEnvCfg, HexapodRoughEnvCfg
-from .hexapod_terrains_cfg import terrain_type_names
+from .hexapod_terrains_cfg import make_hexapod_terrains_cfg, terrain_type_names
 
 BASE_OBS_DIM = 66
 HEIGHT_SCAN_DIM = 187  # 1.6 m x 1.0 m grid at 0.1 m = 17 x 11 rays
@@ -31,6 +31,8 @@ class HexapodEnv(DirectRLEnv):
         cfg.observation_space = (
             BASE_OBS_DIM + (HEIGHT_SCAN_DIM if cfg.perceptive else 0) + (2 if cfg.gait_clock_enabled else 0)
         )
+        if getattr(cfg, "step_cap", None) is not None and cfg.terrain.terrain_type == "generator":
+            cfg.terrain.terrain_generator = make_hexapod_terrains_cfg(step_cap=cfg.step_cap)
         super().__init__(cfg, render_mode, **kwargs)
         # second observation group: the true DR values (RMA teacher input). Plain PPO maps only "policy" to the
         # actor and critic (rsl_rl resolve_obs_groups), so this group is ignored unless obs_groups lists it.
