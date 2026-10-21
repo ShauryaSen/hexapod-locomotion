@@ -144,6 +144,37 @@ jobs = [i for i in range(len(cells)) for _ in range(args.robots_per_cell)]
 print(f"[eval] {len(cells)} cells x {args.robots_per_cell} robots = {len(jobs)} episodes, {num_envs} envs per batch, cmds {cmds}")
 
 
+TOE_OFFSET_TIBIA = (0.130, 0.0, 0.0)  # toe tip in the tibia frame (tools/measure_clearance.py)
+_tibia_ids = [env._robot.body_names.index(f"{l}_tibia") for l in ("lf", "lm", "lr", "rf", "rm", "rr")]
+_toe_offset = torch.tensor(TOE_OFFSET_TIBIA, device=dev).expand(num_envs, 6, 3)
+
+
+def toe_height() -> torch.Tensor:
+    from isaaclab.utils.math import quat_apply
+
+    pos = env._robot.data.body_link_pos_w.torch[:, _tibia_ids]
+    quat = env._robot.data.body_link_quat_w.torch[:, _tibia_ids]
+    return (pos + quat_apply(quat.reshape(-1, 4), _toe_offset.reshape(-1, 3)).reshape(num_envs, 6, 3))[..., 2]
+
+
+def swing_clearance(toe_log: torch.Tensor, done_step: torch.Tensor, window_steps: int) -> torch.Tensor:
+    """Per env: median over legs and gait-period windows of (max - min toe height) in the window; the proxy for
+    swing clearance used for the step-height cap (decisions.md P1/P2). Only steps before the episode ended count."""
+    T, n, _ = toe_log.shape
+    out = torch.full((n,), float("nan"), device=toe_log.device)
+    n_win = T // window_steps
+    if n_win == 0:
+        return out
+    w = toe_log[: n_win * window_steps].reshape(n_win, window_steps, n, 6)
+    span = w.max(dim=1).values - w.min(dim=1).values  # (n_win, n, 6)
+    valid = (torch.arange(n_win, device=toe_log.device)[:, None] + 1) * window_steps <= done_step[None, :]  # (n_win, n)
+    for e in range(n):
+        v = span[valid[:, e], e]
+        if v.numel():
+            out[e] = v.median()
+    return out
+
+
 def load_actor(path: str) -> nn.Module:
     ck = torch.load(path, map_location=dev, weights_only=False)
     sd = ck["actor_state_dict"] if "actor_state_dict" in ck else ck
@@ -184,7 +215,10 @@ def run_batch(actor, batch_jobs):
     done = torch.zeros(num_envs, dtype=torch.bool, device=dev)
     out = {k: torch.zeros(num_envs, device=dev) for k in ("success", "fell", "speed_err", "mean_v_along_cmd", "length_s")}
     steps = int(args.episode_s / env.step_dt) + 2
-    for _ in range(steps):
+    toe_log = []
+    done_step = torch.full((num_envs,), steps, device=dev)
+    for i in range(steps):
+        toe_log.append(toe_height())
         with torch.no_grad():
             act = actor(obs)
         obs_d, _, terminated, truncated, _ = env.step(act)
@@ -193,6 +227,7 @@ def run_batch(actor, batch_jobs):
         if finished.any():
             for k in out:
                 out[k][finished] = env.episode_stats[k][finished]
+            done_step[finished] = i
             done |= finished
         if done[:n].all():
             break
@@ -201,6 +236,8 @@ def run_batch(actor, batch_jobs):
         env._commands[ids, 1] = -torch.tensor([c["cmd"] for c in cell_rows], device=dev)
         env._commands[ids, 2] = 0.0
     env.release_dr(torch.arange(num_envs, device=dev))
+    period = float(env_cfg.gait_period_s) if env_cfg.gait_clock_enabled else 0.5
+    out["clearance"] = swing_clearance(torch.stack(toe_log), done_step, max(int(period / env.step_dt), 2))
     return {k: v[:n].cpu() for k, v in out.items()}
 
 
@@ -212,7 +249,8 @@ def summarize(results):
         per_cell.append(
             {**{k: v for k, v in c.items() if k != "cols"}, "n": n,
              "success": r["success"].mean().item(), "falls": r["fell"].mean().item(),
-             "speed_err": r["speed_err"].mean().item(), "mean_v": r["mean_v_along_cmd"].mean().item()}
+             "speed_err": r["speed_err"].mean().item(), "mean_v": r["mean_v_along_cmd"].mean().item(),
+             "clearance": r["clearance"].nanmedian().item()}
         )
     return per_cell
 
@@ -220,20 +258,22 @@ def summarize(results):
 def table(per_cell, key_fn, header):
     groups = {}
     for pc in per_cell:
-        g = groups.setdefault(key_fn(pc), {"success": 0.0, "falls": 0.0, "speed_err": 0.0, "mean_v": 0.0, "n": 0})
+        g = groups.setdefault(key_fn(pc), {"success": 0.0, "falls": 0.0, "speed_err": 0.0, "mean_v": 0.0, "clearance": [], "n": 0})
         for k in ("success", "falls", "speed_err", "mean_v"):
             g[k] += pc[k] * pc["n"]
+        g["clearance"].append(pc["clearance"])
         g["n"] += pc["n"]
-    lines = [f"| {header} | success | falls | speed err [m/s] | mean v [m/s] | n |", "|---|---|---|---|---|---|"]
+    lines = [f"| {header} | success | falls | speed err [m/s] | mean v [m/s] | clearance [m] | n |", "|---|---|---|---|---|---|---|"]
     for key in sorted(groups):
         g = groups[key]
-        lines.append(f"| {key} | {g['success']/g['n']:.3f} | {g['falls']/g['n']:.3f} | {g['speed_err']/g['n']:.3f} | {g['mean_v']/g['n']:.3f} | {g['n']} |")
+        cl = torch.tensor(g["clearance"]).nanmedian().item()
+        lines.append(f"| {key} | {g['success']/g['n']:.3f} | {g['falls']/g['n']:.3f} | {g['speed_err']/g['n']:.3f} | {g['mean_v']/g['n']:.3f} | {cl:.4f} | {g['n']} |")
     return "\n".join(lines)
 
 
 for ckpt in ckpts:
     actor = load_actor(ckpt)
-    results = {i: {k: [] for k in ("success", "fell", "speed_err", "mean_v_along_cmd", "length_s")} for i in range(len(cells))}
+    results = {i: {k: [] for k in ("success", "fell", "speed_err", "mean_v_along_cmd", "length_s", "clearance")} for i in range(len(cells))}
     for b in range(0, len(jobs), num_envs):
         batch = jobs[b : b + num_envs]
         r = run_batch(actor, batch)
