@@ -107,6 +107,7 @@ for ov in args.env_override:
     k, v = ov.split("=", 1)
     setattr(env_cfg, k, parse_value(v))
     applied[k] = parse_value(v)
+trained_with_curriculum = bool(env_cfg.command_curriculum)  # read before it is switched off below
 env_cfg.spread_resets = False
 env_cfg.terrain_curriculum = False
 env_cfg.command_curriculum = False
@@ -123,7 +124,7 @@ print("[eval] env settings from params/overrides:", applied)
 cmds = args.cmds
 if cmds is None:
     lo = max(0.05, float(getattr(env_cfg, "command_lin_vel_min", 0.0)))
-    hi = float(env_cfg.command_curriculum_max if env_cfg.command_curriculum else env_cfg.command_lin_vel_max)
+    hi = float(env_cfg.command_curriculum_max if trained_with_curriculum else env_cfg.command_lin_vel_max)
     cmds = [round(lo + 0.05 * i, 3) for i in range(int((hi - lo) / 0.05 + 1e-6) + 1)]
 if env._has_terrain_levels:
     n_cols = env._terrain.terrain_origins.shape[1]
