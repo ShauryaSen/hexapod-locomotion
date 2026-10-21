@@ -36,6 +36,7 @@ parser.add_argument("--levels", type=int, nargs="+", default=[0, 1, 2, 3, 4, 5])
 parser.add_argument("--dr", action="store_true", help="randomize friction/mass/strength (cfg ranges) instead of nominal")
 parser.add_argument("--env_override", nargs="*", default=[])
 parser.add_argument("--tag", default="")
+parser.add_argument("--reposition_s", type=float, default=15.0, help="every this many seconds put every robot back on its cell (not counted as a fall); 0 = never. Robots walk along -y and would leave the 10 m terrain in ~40 s")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -110,9 +111,15 @@ windows = []
 for w in range(n_windows):
     falls, rew_sum, verr_sum, v_sum, n = 0, 0.0, 0.0, 0.0, 0
     steps_per_minute = int(60.0 / env.step_dt)
+    repo_steps = int(args.reposition_s / env.step_dt) if args.reposition_s > 0 else 0
     for i_step in range(steps_per_window):
         if i_step and i_step % steps_per_minute == 0:
             print(f"[long_run] window {w + 1}: {i_step // steps_per_minute} min, falls so far {falls}", flush=True)
+        if repo_steps and (w * steps_per_window + i_step) % repo_steps == repo_steps - 1:
+            # back to the cell origin (teleport, standing pose); a fall is only a body contact, never this
+            env._reset_idx(ids.to(torch.int32))
+            env._commands[:, 0], env._commands[:, 1], env._commands[:, 2] = 0.0, -args.cmd, 0.0
+            obs = env._get_observations()["policy"]
         with torch.no_grad():
             act = actor(obs)
         obs_d, rew, terminated, truncated, _ = env.step(act)
@@ -133,7 +140,7 @@ drift = {k: (last[k] - first[k]) / max(abs(first[k]), 1e-9) for k in ("mean_rewa
 total_falls = sum(w["falls"] for w in windows)
 summary = {
     "checkpoint": args.checkpoint, "task": args.task, "cmd": args.cmd, "minutes": args.minutes, "num_envs": N,
-    "levels": args.levels if env._has_terrain_levels else ["flat"], "dr": args.dr, "applied": applied,
+    "levels": args.levels if env._has_terrain_levels else ["flat"], "dr": args.dr, "applied": applied, "reposition_s": args.reposition_s,
     "falls_total": total_falls, "falls_per_robot_hour": total_falls / (N * args.minutes / 60.0),
     "drift_last_vs_first": drift, "windows": windows,
 }
