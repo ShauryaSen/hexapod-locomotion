@@ -27,6 +27,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--out", required=True)
 parser.add_argument("--step_cap", type=float, default=None)
 parser.add_argument("--seed", type=int, default=0)
+parser.add_argument("--version", type=int, default=1)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -40,7 +41,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from hexapod.hexapod_terrains_cfg import HEXAPOD_TERRAINS_CFG, STEP_CAP, make_hexapod_terrains_cfg, terrain_type_names  # noqa: E402
 
-cfg = make_hexapod_terrains_cfg(step_cap=args.step_cap) if args.step_cap is not None else HEXAPOD_TERRAINS_CFG
+cfg = make_hexapod_terrains_cfg(step_cap=args.step_cap, version=args.version) if (args.step_cap is not None or args.version != 1) else HEXAPOD_TERRAINS_CFG
 cfg.seed = args.seed
 gen = cfg.class_type(cfg=cfg, device="cpu")
 mesh = gen.terrain_mesh
@@ -85,7 +86,7 @@ for c, n in enumerate(names):
 rows_tbl = []
 fig, axes = plt.subplots(len(first_col), 2, figsize=(12, 2.2 * len(first_col)), sharex=True)
 for ti, (name, c) in enumerate(first_col.items()):
-    for li, lvl in enumerate((0, 5, 9)):
+    for li, lvl in enumerate((0, 5, 9)):  # noqa: B007
         o = origins[lvl, c]
         xs, xe = o[0] - size / 2, o[0] + size / 2
         ys, ye = o[1] - size / 2, o[1] + size / 2

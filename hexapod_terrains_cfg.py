@@ -55,8 +55,28 @@ def random_uniform_terrain_leveled(difficulty: float, cfg: hf_terrains_cfg.HfRan
     return hf_terrains.random_uniform_terrain.__wrapped__(difficulty, leveled)
 
 
-def make_hexapod_terrains_cfg(step_cap: float = STEP_CAP, include_random_grid: bool = INCLUDE_RANDOM_GRID) -> TerrainGeneratorCfg:
-    """Build the generator config; ``step_cap`` is the obstacle / block height cap [m]."""
+STAIR_TREAD = 0.12
+"""Terrain v2 stair tread [m] ~ one stride of the learned gait at 0.28 m/s (measured 0.124 m median, 2026-10-21)."""
+BOX_GRID_WIDTH = 0.12
+"""Terrain v2 random-box grid width [m], same basis as the tread."""
+
+
+def make_hexapod_terrains_cfg(
+    step_cap: float = STEP_CAP, include_random_grid: bool = INCLUDE_RANDOM_GRID, version: int = 1,
+    tread: float = STAIR_TREAD, grid_width: float = BOX_GRID_WIDTH,
+) -> TerrainGeneratorCfg:
+    """Build the generator config.
+
+    version 1 (2026-10-21 night): random rough, slope, inverted slope, discrete obstacles, random grid (blocks
+    ±step_cap). ``step_cap`` is the obstacle / block height cap [m].
+    version 2 (Shaurya, 2026-10-21 morning): random rough, slope, inverted slope, pyramid stairs, inverted pyramid
+    stairs, random boxes up and down; no obstacles. Heights scale with the level so that the largest single edge at
+    L9 equals ``step_cap`` (the kinematic cap): stair step height (0.005, step_cap), box heights ±step_cap/2 (box range
+    (0.0025, step_cap/2), so an up-box next to a down-box is one step_cap edge). Tread / grid width from the gait
+    footprint test.
+    """
+    if version == 2:
+        return _make_v2(step_cap, tread, grid_width)
     rough = terrain_gen.HfRandomUniformTerrainCfg(
         proportion=1.0, noise_range=(0.005, 0.02), noise_step=0.005, border_width=HF_BORDER
     )
@@ -90,6 +110,45 @@ def make_hexapod_terrains_cfg(step_cap: float = STEP_CAP, include_random_grid: b
         # column-0 tiles within an episode (measured: 100% "falls" there with a 1 m border); 5 m covers 20 s at 0.25 m/s
         num_rows=NUM_LEVELS,
         num_cols=2 * num_types,  # equal proportions: two columns per type (>= 8 columns)
+        horizontal_scale=0.02,
+        vertical_scale=0.001,
+        slope_threshold=0.75,
+        curriculum=True,
+        use_cache=False,
+        sub_terrains=sub_terrains,
+    )
+
+
+def _make_v2(step_cap: float, tread: float, grid_width: float) -> TerrainGeneratorCfg:
+    rough = terrain_gen.HfRandomUniformTerrainCfg(
+        proportion=1.0, noise_range=(0.005, 0.02), noise_step=0.005, border_width=HF_BORDER
+    )
+    rough.function = random_uniform_terrain_leveled
+    sub_terrains = {
+        "random_rough": rough,
+        "slope": terrain_gen.HfPyramidSlopedTerrainCfg(
+            proportion=1.0, slope_range=(0.0, 0.27), platform_width=PLATFORM_WIDTH, border_width=HF_BORDER
+        ),
+        "slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+            proportion=1.0, slope_range=(0.0, 0.27), platform_width=PLATFORM_WIDTH, border_width=HF_BORDER
+        ),
+        "stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
+            proportion=1.0, step_height_range=(0.005, step_cap), step_width=tread, platform_width=PLATFORM_WIDTH,
+            border_width=HF_BORDER, holes=False
+        ),
+        "stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
+            proportion=1.0, step_height_range=(0.005, step_cap), step_width=tread, platform_width=PLATFORM_WIDTH,
+            border_width=HF_BORDER, holes=False
+        ),
+        "boxes": terrain_gen.MeshRandomGridTerrainCfg(
+            proportion=1.0, grid_width=grid_width, grid_height_range=(0.0025, step_cap / 2), platform_width=PLATFORM_WIDTH
+        ),
+    }
+    return TerrainGeneratorCfg(
+        size=(TILE_SIZE, TILE_SIZE),
+        border_width=5.0,
+        num_rows=NUM_LEVELS,
+        num_cols=2 * len(sub_terrains),
         horizontal_scale=0.02,
         vertical_scale=0.001,
         slope_threshold=0.75,
