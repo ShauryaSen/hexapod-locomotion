@@ -61,6 +61,16 @@ env_cfg.episode_length_s = args.steps / 50.0 + 5.0
 if env_cfg.terrain.terrain_type == "generator":
     env_cfg.terrain.max_init_terrain_level = None
 env_cfg.scene.env_spacing = 1.0 if env_cfg.terrain.terrain_type == "plane" else env_cfg.scene.env_spacing
+if env_cfg.terrain.terrain_type == "generator" and args.levels:
+    # headless recording: the viewport camera controller is not created, so the ViewerCfg must already point at the
+    # terrain cell env 0 is pinned to (level = args.levels[0], column 1). Static side view of the first ~2 m of walking.
+    g = env_cfg.terrain.terrain_generator
+    ox = (args.levels[0] + 0.5) * g.size[0] - g.num_rows * g.size[0] / 2
+    oy = (1 + 0.5) * g.size[1] - g.num_cols * g.size[1] / 2
+    env_cfg.viewer.origin_type = "world"
+    env_cfg.viewer.eye = (ox + 1.0, oy - 1.0, 0.45)
+    env_cfg.viewer.lookat = (ox, oy - 1.0, 0.05)
+    print(f"[record_video] camera at {env_cfg.viewer.eye} looking at {env_cfg.viewer.lookat} (cell origin {ox:.2f}, {oy:.2f})")
 env = gym.make(args.task, cfg=env_cfg, render_mode="rgb_array")
 raw = env.unwrapped
 os.makedirs(args.out, exist_ok=True)
@@ -106,6 +116,7 @@ def follow_env0():
     cam.update_view_location(eye=(pos + eye_off).tolist(), lookat=(pos + look_off).tolist())
 
 
+print("[record_video] viewport camera controller:", cam)
 follow_env0()
 for _ in range(args.steps):
     with torch.no_grad():
