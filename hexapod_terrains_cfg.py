@@ -86,7 +86,8 @@ def make_hexapod_terrains_cfg(step_cap: float = STEP_CAP, include_random_grid: b
     num_types = len(sub_terrains)
     return TerrainGeneratorCfg(
         size=(TILE_SIZE, TILE_SIZE),
-        border_width=1.0,
+        border_width=5.0,  # flat ground around the tiles. Robots walk along -y (their forward axis) and leave the
+        # column-0 tiles within an episode (measured: 100% "falls" there with a 1 m border); 5 m covers 20 s at 0.25 m/s
         num_rows=NUM_LEVELS,
         num_cols=2 * num_types,  # equal proportions: two columns per type (>= 8 columns)
         horizontal_scale=0.02,

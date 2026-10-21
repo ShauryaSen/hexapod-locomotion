@@ -134,7 +134,9 @@ if env._has_terrain_levels:
     if args.per_column:
         terrain_cells = [(lvl, f"{type_names[col]}#{col}", [col]) for lvl in args.levels for col in range(n_cols)]
     else:
-        terrain_cells = [(lvl, name, cols) for lvl in args.levels for name, cols in seen.items()]
+        # robots walk along -y, i.e. towards lower column indices: start them in the highest column of each type's
+        # pair so the next 2 m tile is the same type (3 m of one type covers 20 s at 0.15 m/s)
+        terrain_cells = [(lvl, name, [max(cols)]) for lvl in args.levels for name, cols in seen.items()]
 else:
     terrain_cells = [(0, "flat", [0])]
 dr_cells = [(float(env_cfg.sim.physics_material.static_friction), 0.0, 1.0)] if args.nominal_only else list(itertools.product(FRICTIONS, MASSES, STRENGTHS))
