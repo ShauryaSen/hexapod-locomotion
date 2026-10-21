@@ -130,16 +130,13 @@ ensemble.eval()
 (_, _, _, valid_c), res_c, dis_c, falls_calib = rollout(args.calib_steps, ensemble)
 r = res_c[~np.isnan(res_c)]
 d = dis_c[~np.isnan(dis_c)]
-with torch.no_grad():
-    ensemble.nominal_mu.fill_(float(r.mean()))
-    ensemble.nominal_sigma.fill_(float(r.std()))
-    ensemble.nominal_mu_dis.fill_(float(d.mean()))
-    ensemble.nominal_sigma_dis.fill_(float(d.std()))
+ensemble.set_calibration(res_c, dis_c)
 stats = {
     "checkpoint": args.checkpoint, "num_envs": N, "train_steps": args.steps, "calib_steps": args.calib_steps, "levels": list(dcfg.levels),
     "n_train_transitions": int(obs.shape[0]), "falls_train": falls_train, "falls_calib": falls_calib, "ensemble_cfg": C.to_dict(ecfg),
     "history": res["history"], "heldout_step_nmse_mean": res["heldout_nmse_mean"], "heldout_step_nmse_std": res["heldout_nmse_std"],
     "calib_cycle_residual_mean": float(r.mean()), "calib_cycle_residual_std": float(r.std()),
+    "calib_cycle_log_residual_mean": float(ensemble.nominal_mu_log), "calib_cycle_log_residual_std": float(ensemble.nominal_sigma_log),
     "calib_cycle_residual_p50_p95_p99": [float(np.quantile(r, q)) for q in (0.5, 0.95, 0.99)],
     "calib_cycle_disagreement_mean": float(d.mean()), "calib_cycle_disagreement_std": float(d.std()),
     "calib_cycles": int(res_c.shape[0]), "dr_ranges": {"friction": env.cfg.dr.friction_static_range, "mass": env.cfg.dr.mass_add_range_kg, "motor": env.cfg.dr.motor_strength_range},

@@ -39,7 +39,7 @@ class DeploymentRunner:
         self.stream = StreamLog(self.n, self.dev)
         self.events: list[dict] = []
         self.ids = torch.arange(self.n, device=self.dev)
-        self.calibrated = ensemble is not None and not bool(torch.isnan(ensemble.nominal_sigma))
+        self.calibrated = ensemble is not None and ensemble.is_calibrated()
 
     def run(self, minutes: float, progress_every_min: float = 1.0) -> dict:
         env, cfg, upd, arm = self.env, self.cfg, self.updater, self.arm

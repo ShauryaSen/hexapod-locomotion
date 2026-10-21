@@ -116,6 +116,10 @@ class EnsembleCfg:
     """Per-step residual = mean over target dims of ((ensemble-mean prediction - target) / sigma_target)^2; per cycle =
     mean over the cycle's steps. ASSUMED. 'disagreement' (variance across members) is logged alongside as the
     ablation signal."""
+    residual_transform: str = "log"
+    """Transform applied to the per-cycle residual before standardization: 'log' or 'none'. MEASURED 2026-10-21 on
+    32 nominal robot-minutes (seed 1, DR range, L0-L5): the raw per-cycle nMSE has skew 7.8 and max z 19.7 (p99
+    4.1); log(nMSE) has skew 0.7 and max z 4.8 (p99 3.0). The raw residual stays in the streams; only z changes."""
 
 
 @dataclass

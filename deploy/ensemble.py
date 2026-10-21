@@ -40,6 +40,8 @@ class DynamicsEnsemble(nn.Module):
         self.register_buffer("nominal_sigma", torch.tensor(float("nan")))
         self.register_buffer("nominal_mu_dis", torch.tensor(float("nan")))
         self.register_buffer("nominal_sigma_dis", torch.tensor(float("nan")))
+        self.register_buffer("nominal_mu_log", torch.tensor(float("nan")))
+        self.register_buffer("nominal_sigma_log", torch.tensor(float("nan")))
 
     # ---- data ------------------------------------------------------------------------------------------------
     def make_target(self, obs: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:
@@ -75,8 +77,43 @@ class DynamicsEnsemble(nn.Module):
         pred = self.net(inputs_n)
         return ((pred - targets_n) ** 2).mean(dim=(1, 2)).sum()
 
+    def is_calibrated(self) -> bool:
+        if getattr(self.cfg, "residual_transform", "log") == "log":
+            return not bool(torch.isnan(self.nominal_sigma_log))
+        return not bool(torch.isnan(self.nominal_sigma))
+
     def standardize(self, residual: torch.Tensor) -> torch.Tensor:
+        """z of a per-cycle residual (cfg.residual_transform: log or none)."""
+        if getattr(self.cfg, "residual_transform", "log") == "log":
+            return (torch.log(residual.clamp_min(1e-12)) - self.nominal_mu_log) / self.nominal_sigma_log
         return (residual - self.nominal_mu) / self.nominal_sigma
+
+    @torch.no_grad()
+    def set_calibration(self, residual_cycles, disagreement_cycles=None):
+        """Nominal per-cycle statistics (raw and log) from arrays of shape (cycles, envs), NaN = skip."""
+        import numpy as np
+
+        r = np.asarray(residual_cycles, dtype=np.float64)
+        r = r[~np.isnan(r)]
+        self.nominal_mu.fill_(float(r.mean()))
+        self.nominal_sigma.fill_(float(r.std()))
+        lr = np.log(np.clip(r, 1e-12, None))
+        self.nominal_mu_log.fill_(float(lr.mean()))
+        self.nominal_sigma_log.fill_(float(lr.std()))
+        if disagreement_cycles is not None:
+            d = np.asarray(disagreement_cycles, dtype=np.float64)
+            d = d[~np.isnan(d)]
+            self.nominal_mu_dis.fill_(float(d.mean()))
+            self.nominal_sigma_dis.fill_(float(d.std()))
+
+    def standardize_np(self, residual):
+        """numpy version of standardize for offline tools."""
+        import numpy as np
+
+        r = np.asarray(residual, dtype=np.float64)
+        if getattr(self.cfg, "residual_transform", "log") == "log":
+            return (np.log(np.clip(r, 1e-12, None)) - float(self.nominal_mu_log)) / float(self.nominal_sigma_log)
+        return (r - float(self.nominal_mu)) / float(self.nominal_sigma)
 
     # ---- io ----------------------------------------------------------------------------------------------------
     def save(self, path: str, extra: dict | None = None):
@@ -87,7 +124,7 @@ class DynamicsEnsemble(nn.Module):
         ck = torch.load(path, map_location=device, weights_only=False)
         cfg = EnsembleCfg(**ck["cfg"])
         m = DynamicsEnsemble(ck["obs_dim"], ck["act_dim"], cfg).to(device)
-        m.load_state_dict(ck["state_dict"])
+        m.load_state_dict(ck["state_dict"], strict=False)
         m.eval()
         return m
 
