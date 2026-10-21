@@ -22,7 +22,8 @@ stop_tagged() {
 
 for attempt in $(seq 1 "$max_attempts"); do
   tag="$(date +%s)_$$_$attempt"
-  ~/bin/isaac-shell env SPARK_RUN_TAG="$tag" "$@" > "$log" 2>&1 &
+  # PYTHONUNBUFFERED: without it python block-buffers stdout under nohup and the log lags by minutes (or until exit)
+  ~/bin/isaac-shell env SPARK_RUN_TAG="$tag" PYTHONUNBUFFERED=1 "$@" > "$log" 2>&1 &
   pid=$!
   started=0
   for _ in $(seq 1 $((startup_timeout / 2))); do
