@@ -50,14 +50,16 @@ class HexapodRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 50
     experiment_name = "hexapod_rough_direct"
     obs_groups = {"actor": ["policy"], "critic": ["policy"]}
+    # Same 128x3 layout as the flat runner (was ANYmal's 512/256/128) so stage 1 can warm-start from a flat sweep
+    # checkpoint with --resume (decisions.md P7: staged training). Default choice, 2026-10-21.
     actor = RslRlMLPModelCfg(
-        hidden_dims=[512, 256, 128],
+        hidden_dims=[128, 128, 128],
         activation="elu",
         obs_normalization=False,
         distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
     )
     critic = RslRlMLPModelCfg(
-        hidden_dims=[512, 256, 128],
+        hidden_dims=[128, 128, 128],
         activation="elu",
         obs_normalization=False,
     )
