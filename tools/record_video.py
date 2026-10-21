@@ -92,9 +92,25 @@ obs, _ = env.reset()
 raw._commands[:, 0], raw._commands[:, 1], raw._commands[:, 2] = 0.0, -args.cmd, 0.0
 obs = raw._get_observations()["policy"]
 falls = 0
+cam = getattr(raw, "viewport_camera_controller", None)
+eye_off = torch.tensor(env_cfg.viewer.eye, device=dev)
+look_off = torch.tensor(env_cfg.viewer.lookat, device=dev)
+
+
+def follow_env0():
+    # the viewer's asset_root tracking does not follow a robot that was teleported to a terrain cell; place the
+    # camera relative to env 0's robot every step instead (same offsets as the ViewerCfg)
+    if cam is None:
+        return
+    pos = raw._robot.data.root_pos_w.torch[0]
+    cam.update_view_location(eye=(pos + eye_off).tolist(), lookat=(pos + look_off).tolist())
+
+
+follow_env0()
 for _ in range(args.steps):
     with torch.no_grad():
         act = actor(obs)
+    follow_env0()
     obs_d, _, terminated, _, _ = env.step(act)
     obs = obs_d["policy"]
     falls += int(terminated.sum().item())
