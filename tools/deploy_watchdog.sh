@@ -26,9 +26,10 @@ while true; do
   for pid in $(pgrep -f "$pattern"); do
     args=$(tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null) || continue
     case "$args" in *python3*) ;; *) continue ;; esac
-    # the log is the spark_run.sh LOGFILE of the ancestor wrapper with the same tool name
-    tool=$(echo "$args" | grep -o 'tools/deploy_[a-z_0-9]*\.py' | head -1)
-    log=$(pgrep -fa "spark_run.sh .* -- .*${tool}" | grep -o 'logs/deploy/[^ ]*\.log' | head -1)
+    # the log is the LOGFILE of the spark_run.sh wrapper whose command line carries the same tool arguments
+    # (the python runs inside a container, so its host parent chain does not reach the wrapper)
+    key=$(echo "$args" | sed -E 's#.*tools/deploy_[a-z_0-9]*\.py##' | xargs)
+    log=$(pgrep -fa "spark_run.sh" | grep -F -- "$key" | grep -o 'logs/deploy/[^ ]*\.log' | head -1)
     [ -n "$log" ] && log="$HOME/src/isaaclab-learning/$log"
     if [ -z "${watched[$pid]:-}" ]; then
       watched[$pid]="$log"
