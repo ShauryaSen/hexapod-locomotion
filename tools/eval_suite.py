@@ -71,7 +71,7 @@ STRENGTHS = [0.8, 1.0, 1.2]
 PARAM_KEYS = (  # scalar env.yaml fields that change the policy's interface or the task; everything else stays default
     "action_scale", "gait_clock_enabled", "gait_period_s", "command_forward_only", "command_lin_vel_min",
     "command_lin_vel_max", "command_yaw_rate_max", "perceptive", "command_curriculum_max", "command_curriculum",
-    "step_cap", "terrain_version", "terrain_stair_tread", "terrain_stair_platform",  # the terrain the run trained on (added 2026-10-22; earlier rough evals used the module defaults)
+    "step_cap", "terrain_version", "terrain_stair_tread", "terrain_stair_platform", "terrain_tile_size",  # the terrain the run trained on (added 2026-10-22; earlier rough evals used the module defaults)
 )
 
 

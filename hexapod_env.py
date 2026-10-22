@@ -39,6 +39,8 @@ class HexapodEnv(DirectRLEnv):
                 kw["tread"] = cfg.terrain_stair_tread
             if getattr(cfg, "terrain_stair_platform", None) is not None:
                 kw["stair_platform"] = cfg.terrain_stair_platform
+            if getattr(cfg, "terrain_tile_size", None) is not None:
+                kw["tile_size"] = cfg.terrain_tile_size
             cfg.terrain.terrain_generator = make_hexapod_terrains_cfg(**kw)
         super().__init__(cfg, render_mode, **kwargs)
         # second observation group: the true DR values (RMA teacher input). Plain PPO maps only "policy" to the

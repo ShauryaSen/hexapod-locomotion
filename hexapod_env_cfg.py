@@ -234,6 +234,9 @@ class HexapodRoughEnvCfg(HexapodFlatEnvCfg):
     terrain_version: int = 1
     terrain_stair_tread: float | None = None
     """Terrain v2 stair tread [m]; None = hexapod_terrains_cfg.STAIR_TREAD (0.12). Added for the stairs doability study."""
+    terrain_tile_size: float | None = None
+    """Terrain v2 tile size [m]; None = TILE_SIZE (2.0). For the platform-width eval (2026-10-22), kept with the
+    platform so the stair count per side is unchanged: Isaac Lab steps = (tile - 2*0.04 - platform) // (2*tread) + 1."""
     terrain_stair_platform: float | None = None
     """Terrain v2 platform width [m] of the stair (apex / pit) and box tiles; None = PLATFORM_WIDTH (0.5)."""
     """1 = the 2026-10-21 night set (rough, slopes, obstacles, grid); 2 = Shaurya's set (rough, slopes, stairs both

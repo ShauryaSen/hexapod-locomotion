@@ -64,6 +64,7 @@ BOX_GRID_WIDTH = 0.12
 def make_hexapod_terrains_cfg(
     step_cap: float = STEP_CAP, include_random_grid: bool = INCLUDE_RANDOM_GRID, version: int = 1,
     tread: float = STAIR_TREAD, grid_width: float = BOX_GRID_WIDTH, stair_platform: float = PLATFORM_WIDTH,
+    tile_size: float = TILE_SIZE,
 ) -> TerrainGeneratorCfg:
     """Build the generator config.
 
@@ -76,7 +77,7 @@ def make_hexapod_terrains_cfg(
     footprint test.
     """
     if version == 2:
-        return _make_v2(step_cap, tread, grid_width, stair_platform)
+        return _make_v2(step_cap, tread, grid_width, stair_platform, tile_size)
     rough = terrain_gen.HfRandomUniformTerrainCfg(
         proportion=1.0, noise_range=(0.005, 0.02), noise_step=0.005, border_width=HF_BORDER
     )
@@ -119,7 +120,7 @@ def make_hexapod_terrains_cfg(
     )
 
 
-def _make_v2(step_cap: float, tread: float, grid_width: float, stair_platform: float = PLATFORM_WIDTH) -> TerrainGeneratorCfg:
+def _make_v2(step_cap: float, tread: float, grid_width: float, stair_platform: float = PLATFORM_WIDTH, tile_size: float = TILE_SIZE) -> TerrainGeneratorCfg:
     rough = terrain_gen.HfRandomUniformTerrainCfg(
         proportion=1.0, noise_range=(0.005, 0.02), noise_step=0.005, border_width=HF_BORDER
     )
@@ -145,7 +146,7 @@ def _make_v2(step_cap: float, tread: float, grid_width: float, stair_platform: f
         ),
     }
     return TerrainGeneratorCfg(
-        size=(TILE_SIZE, TILE_SIZE),
+        size=(tile_size, tile_size),
         border_width=5.0,
         num_rows=NUM_LEVELS,
         num_cols=2 * len(sub_terrains),
