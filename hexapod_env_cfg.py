@@ -226,6 +226,10 @@ class HexapodRoughEnvCfg(HexapodFlatEnvCfg):
     """Obstacle / grid block height cap [m] for this run; None keeps hexapod_terrains_cfg.STEP_CAP. The env rebuilds
     the generator config with make_hexapod_terrains_cfg(step_cap, version=terrain_version) before the scene is created."""
     terrain_version: int = 1
+    terrain_stair_tread: float | None = None
+    """Terrain v2 stair tread [m]; None = hexapod_terrains_cfg.STAIR_TREAD (0.12). Added for the stairs doability study."""
+    terrain_stair_platform: float | None = None
+    """Terrain v2 stair apex/pit platform width [m]; None = PLATFORM_WIDTH (0.5)."""
     """1 = the 2026-10-21 night set (rough, slopes, obstacles, grid); 2 = Shaurya's set (rough, slopes, stairs both
     ways, boxes up and down). With version 2 the env always rebuilds the generator config."""
 

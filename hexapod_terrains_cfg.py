@@ -63,7 +63,7 @@ BOX_GRID_WIDTH = 0.12
 
 def make_hexapod_terrains_cfg(
     step_cap: float = STEP_CAP, include_random_grid: bool = INCLUDE_RANDOM_GRID, version: int = 1,
-    tread: float = STAIR_TREAD, grid_width: float = BOX_GRID_WIDTH,
+    tread: float = STAIR_TREAD, grid_width: float = BOX_GRID_WIDTH, stair_platform: float = PLATFORM_WIDTH,
 ) -> TerrainGeneratorCfg:
     """Build the generator config.
 
@@ -76,7 +76,7 @@ def make_hexapod_terrains_cfg(
     footprint test.
     """
     if version == 2:
-        return _make_v2(step_cap, tread, grid_width)
+        return _make_v2(step_cap, tread, grid_width, stair_platform)
     rough = terrain_gen.HfRandomUniformTerrainCfg(
         proportion=1.0, noise_range=(0.005, 0.02), noise_step=0.005, border_width=HF_BORDER
     )
@@ -119,7 +119,7 @@ def make_hexapod_terrains_cfg(
     )
 
 
-def _make_v2(step_cap: float, tread: float, grid_width: float) -> TerrainGeneratorCfg:
+def _make_v2(step_cap: float, tread: float, grid_width: float, stair_platform: float = PLATFORM_WIDTH) -> TerrainGeneratorCfg:
     rough = terrain_gen.HfRandomUniformTerrainCfg(
         proportion=1.0, noise_range=(0.005, 0.02), noise_step=0.005, border_width=HF_BORDER
     )
@@ -133,11 +133,11 @@ def _make_v2(step_cap: float, tread: float, grid_width: float) -> TerrainGenerat
             proportion=1.0, slope_range=(0.0, 0.27), platform_width=PLATFORM_WIDTH, border_width=HF_BORDER
         ),
         "stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-            proportion=1.0, step_height_range=(0.005, step_cap), step_width=tread, platform_width=PLATFORM_WIDTH,
+            proportion=1.0, step_height_range=(0.005, step_cap), step_width=tread, platform_width=stair_platform,
             border_width=HF_BORDER, holes=False
         ),
         "stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
-            proportion=1.0, step_height_range=(0.005, step_cap), step_width=tread, platform_width=PLATFORM_WIDTH,
+            proportion=1.0, step_height_range=(0.005, step_cap), step_width=tread, platform_width=stair_platform,
             border_width=HF_BORDER, holes=False
         ),
         "boxes": terrain_gen.MeshRandomGridTerrainCfg(

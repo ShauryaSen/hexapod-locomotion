@@ -51,6 +51,7 @@ parser.add_argument("--episode_s", type=float, default=20.0)
 parser.add_argument("--env_override", nargs="*", default=[], help="key=value env cfg overrides (applied after params)")
 parser.add_argument("--no_params", action="store_true", help="do not read <run>/params/env.yaml")
 parser.add_argument("--tag", default="", help="suffix for the output files")
+parser.add_argument("--types", nargs="+", default=None, help="rough env: only these terrain types")
 parser.add_argument("--per_column", action="store_true", help="one cell per terrain column (type name gets the column index) instead of per type")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
@@ -70,7 +71,7 @@ STRENGTHS = [0.8, 1.0, 1.2]
 PARAM_KEYS = (  # scalar env.yaml fields that change the policy's interface or the task; everything else stays default
     "action_scale", "gait_clock_enabled", "gait_period_s", "command_forward_only", "command_lin_vel_min",
     "command_lin_vel_max", "command_yaw_rate_max", "perceptive", "command_curriculum_max", "command_curriculum",
-    "step_cap", "terrain_version",  # the terrain the run trained on (added 2026-10-22; earlier rough evals used the module defaults)
+    "step_cap", "terrain_version", "terrain_stair_tread", "terrain_stair_platform",  # the terrain the run trained on (added 2026-10-22; earlier rough evals used the module defaults)
 )
 
 
@@ -141,7 +142,7 @@ if env._has_terrain_levels:
     else:
         # robots walk along -y, i.e. towards lower column indices: start them in the highest column of each type's
         # pair so the next 2 m tile is the same type (3 m of one type covers 20 s at 0.15 m/s)
-        terrain_cells = [(lvl, name, [max(cols)]) for lvl in args.levels for name, cols in seen.items()]
+        terrain_cells = [(lvl, name, [max(cols)]) for lvl in args.levels for name, cols in seen.items() if args.types is None or name in args.types]
 else:
     terrain_cells = [(0, "flat", [0])]
 dr_cells = [(float(env_cfg.sim.physics_material.static_friction), 0.0, 1.0)] if args.nominal_only else list(itertools.product(FRICTIONS, MASSES, STRENGTHS))
