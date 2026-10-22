@@ -143,6 +143,9 @@ elif raw._has_terrain_levels and args.levels:
     raw.set_terrain_cells(ids, levels, types)
     if args.lateral_spread > 0 and N > 1:
         raw._terrain.env_origins[:, 0] += torch.linspace(-args.lateral_spread, args.lateral_spread, N, device=dev)
+        # off the centre platform the ground can be higher (pits, inverted slopes): spawn a little higher and let the
+        # robots drop onto the terrain instead of starting inside it
+        raw._terrain.env_origins[:, 2] += 0.06
 obs, _ = env.reset()
 raw._commands[:, 0], raw._commands[:, 1], raw._commands[:, 2] = 0.0, -args.cmd, 0.0
 obs = raw._get_observations()["policy"]
