@@ -68,6 +68,14 @@ for t, c in COL.items():
 # 4. moving overview
 rec("overview_v21_48robots_wide", R, host_ckpt, a.cmd, ["--spread", "--levels", "0", "3", "5", "9", "--num_envs", "48", "--steps", "750", "--cam_eye", "20", "-18", "14", "--cam_lookat", "0", "0", "-1"],
     {"type": "all", "level": "0/3/5/9", "view": "wide"})
+# 4b. one robot on each of the 12 tiles of the level-5 and level-9 rows (all six types side by side), moving
+for L in (5, 9):
+    cx = (L + 0.5) * 2.0 - 10.0  # row centre x on the v2.1 grid (2 m tiles, 10 rows centred on 0)
+    row = ["--spread", "--levels", str(L), "--num_envs", "12", "--steps", "750"]
+    rec(f"row_L{L}_12tiles_side", R, host_ckpt, a.cmd, row + ["--cam_eye", str(cx + 14.0), "0", "6", "--cam_lookat", str(cx), "0", "-0.5"],
+        {"type": "all six", "level": L, "view": "side (robots walk along the row, -y)"})
+    rec(f"row_L{L}_12tiles_along", R, host_ckpt, a.cmd, row + ["--cam_eye", str(cx + 2.5), "13", "2.2", "--cam_lookat", str(cx), "-7", "0"],
+        {"type": "all six", "level": L, "view": "along the row"})
 # 3. flat fastest
 fl = plan.get("flat_fastest")
 if fl:
