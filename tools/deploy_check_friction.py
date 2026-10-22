@@ -34,6 +34,9 @@ parser.add_argument("--seconds", type=float, default=30.0)
 parser.add_argument("--settle_s", type=float, default=3.0)
 parser.add_argument("--terrain_type", default="slope", help="pin every robot to the first column of this sub-terrain type at level 0 ('slope' at L0 is exactly flat, so world z is the contact normal); '' = the deployment default (all L0 types)")
 parser.add_argument("--out", default=None, help="default: <checkpoint dir>/ensemble/friction_check_<mu>.json")
+parser.add_argument("--slide_test", action="store_true", help="instead of walking: robots stand (default joint targets, zero action) on a level --slide_level slope tile, --slide_offset m from the tile centre (off the flat platform); with mu below tan(slope) they must slide, with mu 1.0 they must not. Reports the horizontal displacement after --settle_s")
+parser.add_argument("--slide_level", type=int, default=9)
+parser.add_argument("--slide_offset", type=float, default=0.65)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -53,6 +56,46 @@ dev, N, dt = env.device, env.num_envs, float(env.step_dt)
 actor, _, info = build_from_checkpoint(args.checkpoint, N, dev)
 ids = torch.arange(N, device=dev)
 low = ids[: N // 2]
+if args.slide_test:
+    col = env.terrain_type_names.index("slope")
+    env.set_terrain_cells(ids, args.slide_level, col)
+    env.set_friction(low, args.mu, hold=True)
+    reset_in_place(env, ids, dcfg.cmd_speed)
+    # move every robot off the flat platform onto the slope, 3 cm above the default height (it drops and settles)
+    pose = env._robot.data.root_pose_w.torch.clone()
+    ang = torch.arange(N, device=dev).float() * (2 * 3.14159 / max(N // 2, 1))
+    pose[:, 0] = env._terrain.env_origins[:, 0] + args.slide_offset * torch.cos(ang)
+    pose[:, 1] = env._terrain.env_origins[:, 1] + args.slide_offset * torch.sin(ang)
+    pose[:, 2] += 0.15
+    env._robot.write_root_pose_to_sim_index(root_pose=pose, env_ids=ids.to(torch.int32))
+    env._robot.write_root_velocity_to_sim_index(root_velocity=torch.zeros(N, 6, device=dev), env_ids=ids.to(torch.int32))
+    zero = torch.zeros(N, env.single_action_space.shape[0], device=dev)
+    settle = int(args.settle_s / dt)
+    for _ in range(settle):
+        env.step(zero)
+    p0 = env._robot.data.root_pos_w.torch[:, :2].clone()
+    z0 = env._robot.data.root_pos_w.torch[:, 2].clone()
+    steps = int(args.seconds / dt)
+    falls = torch.zeros(N, device=dev)
+    for _ in range(steps):
+        _, _, term, _, _ = env.step(zero)
+        falls += term.float()
+    disp = torch.linalg.norm(env._robot.data.root_pos_w.torch[:, :2] - p0, dim=-1)
+    dz = env._robot.data.root_pos_w.torch[:, 2] - z0
+    mat = wp.to_torch(env._robot.root_view.get_material_properties())
+    res = {"test": "slide", "checkpoint": args.checkpoint, "mu_set": args.mu, "slide_level": args.slide_level, "slide_offset_m": args.slide_offset, "seconds": args.seconds, "settle_s": args.settle_s,
+           "slope_deg_note": "L9 slope tiles reach 15.1 deg (terrain audit, overnight report); sliding needs mu < tan(slope) = 0.27",
+           "readback_low_static": float(mat[low.cpu(), :, 0].mean()), "readback_nominal_static": float(mat[ids[N // 2 :].cpu(), :, 0].mean()),
+           "low": {"disp_m_per_robot": disp[low].tolist(), "disp_mean_m": float(disp[low].mean()), "dz_mean_m": float(dz[low].mean()), "falls": float(falls[low].sum())},
+           "nominal": {"disp_m_per_robot": disp[ids[N // 2 :]].tolist(), "disp_mean_m": float(disp[ids[N // 2 :]].mean()), "dz_mean_m": float(dz[ids[N // 2 :]].mean()), "falls": float(falls[ids[N // 2 :]].sum())}}
+    print(json.dumps(res, indent=1))
+    out = args.out or os.path.join(os.path.dirname(args.checkpoint), "ensemble", f"friction_slide_{args.mu:g}.json")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    json.dump(res, open(out, "w"), indent=1)
+    print("[friction] wrote", out)
+    env.close()
+    app.close()
+    sys.exit(0)
 if args.terrain_type and env._has_terrain_levels:
     col = env.terrain_type_names.index(args.terrain_type)
     env.set_terrain_cells(ids, 0, col)
