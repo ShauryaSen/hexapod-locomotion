@@ -115,7 +115,7 @@ applier = ScheduleApplier(env, schedules, scfg)
 runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"], preproc=preproc)
 
 meta = {
-    "checkpoint": args.checkpoint, "task": args.task, "num_envs": N, "arm": args.arm, "arm_label": arm_label(acfg, detcfg), "minutes": minutes,
+    "checkpoint": args.checkpoint, "task": args.task, "num_envs": N, "arm": args.arm, "arm_label": arm_label(acfg, detcfg), "tag": args.tag, "minutes": minutes,
     "rma_student": info.get("rma_student") is not None, "schedule_split": [None if s is None else ("tune" if s.seed in scfg.tune_seeds else "test" if s.seed in scfg.test_seeds else "other") for s in schedules],
     "schedule_seeds": None if args.no_schedule else args.schedule_seeds, "env_schedule_seed": [None if s is None else s.seed for s in schedules],
     "ensemble": args.ensemble, "cusum_h": args.cusum_h, "env_applied": applied, "step_dt": env.step_dt,

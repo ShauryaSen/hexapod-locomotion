@@ -68,10 +68,12 @@ def deployment_metrics(arrays: dict[str, np.ndarray], i: int, schedule: Schedule
     alarm_times = t[alarm]
     if schedule is not None:
         changes = np.array(schedule.change_times())
-        # false alarms: alarms with no change in (t - window, t]
+        # R4 false alarm: an episode start more than one window (= budget) after the last change; the deployment
+        # start (t = 0) counts as a change, so an arm that starts adapting at t = 0 by design is not an alarm (ASSUMED)
+        ref = np.concatenate([[0.0], changes])
         fa = 0
         for ta in alarm_times:
-            if not np.any((changes <= ta) & (changes > ta - window_s)):
+            if not np.any((ref <= ta) & (ref > ta - window_s - 1e-9)):
                 fa += 1
         # R4: delay = time from the change to the first fine-tuning cycle (adapting) within the window; 0 for an arm
         # that is already adapting at the change (always-on)
@@ -114,7 +116,8 @@ def deployment_metrics(arrays: dict[str, np.ndarray], i: int, schedule: Schedule
             "recurrence_gain_m": float(np.mean(gains)) if gains else float("nan"),
         })
     else:
-        out.update({"false_alarms": int(alarm.sum()), "false_alarms_per_h": alarm.sum() / max(hours, 1e-9), "detection_delay_s": float("nan"), "missed": 0, "n_changes": 0, "quiet_progress_m": out["progress_m"], "quiet_min": out["minutes"], "quiet_progress_per_h": out["progress_per_h"], "post_change_progress_m": 0.0, "post_change_min": 0.0, "recurrence_progress_m": 0.0, "recurrence_min": 0.0, "nominal_fraction": 1.0, "recurrence_gain_m": float("nan")})
+        fa = int(np.sum(alarm_times > window_s))  # no changes: only the deployment start (t = 0) is a reference
+        out.update({"false_alarms": fa, "false_alarms_per_h": fa / max(hours, 1e-9), "detection_delay_s": float("nan"), "missed": 0, "n_changes": 0, "quiet_progress_m": out["progress_m"], "quiet_min": out["minutes"], "quiet_progress_per_h": out["progress_per_h"], "post_change_progress_m": 0.0, "post_change_min": 0.0, "recurrence_progress_m": 0.0, "recurrence_min": 0.0, "nominal_fraction": 1.0, "recurrence_gain_m": float("nan")})
     return out
 
 

@@ -38,6 +38,7 @@ parser.add_argument("--root", required=True, help="directory of deploy_run.py ou
 parser.add_argument("--out", default=None, help="markdown output (default <root>/summary.md)")
 parser.add_argument("--detect_window_min", type=float, default=None)
 parser.add_argument("--bootstrap_n", type=int, default=1000)
+parser.add_argument("--label_by_tag", action="store_true", help="append the run tag to the arm label (pilot comparisons of updater settings; off for the main study, where the label is the arm and its knob only)")
 args = parser.parse_args()
 mcfg = C.MetricsCfg(detect_window_min=args.detect_window_min, bootstrap_n=args.bootstrap_n)
 scfg = C.ScheduleCfg()
@@ -65,7 +66,14 @@ for meta_path in sorted(glob.glob(os.path.join(args.root, "**", "meta.json"), re
         split = (meta.get("schedule_split") or [None] * len(meta["env_schedule_seed"]))[i]
         if split is None and seed is not None:
             split = "tune" if seed in scfg.tune_seeds else "test" if seed in scfg.test_seeds else "other"
-        m.update({"arm": meta["arm"], "arm_label": meta.get("arm_label") or meta["arm"], "checkpoint": os.path.basename(os.path.dirname(meta["checkpoint"])) + "/" + os.path.basename(meta["checkpoint"]), "schedule_seed": seed, "split": split or "none", "env": i, "env_seed": (meta.get("deploy_cfg") or {}).get("env_seed", 0), "period_min": (meta.get("arm_cfg") or {}).get("period_min"), "run_dir": run_dir})
+        lab = meta.get("arm_label") or meta["arm"]
+        tag = meta.get("tag")
+        if tag is None:  # runs written before the tag was stored: <stamp>_<arm>_<tag>
+            base = os.path.basename(run_dir.rstrip("/"))
+            tag = base.split(f"_{meta['arm']}_", 1)[1] if f"_{meta['arm']}_" in base else ""
+        if args.label_by_tag and tag:
+            lab = f"{lab}[{tag}]"
+        m.update({"arm": meta["arm"], "arm_label": lab, "checkpoint": os.path.basename(os.path.dirname(meta["checkpoint"])) + "/" + os.path.basename(meta["checkpoint"]), "schedule_seed": seed, "split": split or "none", "env": i, "env_seed": (meta.get("deploy_cfg") or {}).get("env_seed", 0), "period_min": (meta.get("arm_cfg") or {}).get("period_min"), "run_dir": run_dir})
         rows.append(m)
 print(f"[summarize] {len(rows)} deployments from {len({r['run_dir'] for r in rows})} runs")
 
