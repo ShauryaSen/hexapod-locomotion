@@ -32,6 +32,7 @@ parser.add_argument("--num_envs", type=int, default=16)
 parser.add_argument("--mu", type=float, default=0.05)
 parser.add_argument("--seconds", type=float, default=30.0)
 parser.add_argument("--settle_s", type=float, default=3.0)
+parser.add_argument("--terrain_type", default="slope", help="pin every robot to the first column of this sub-terrain type at level 0 ('slope' at L0 is exactly flat, so world z is the contact normal); '' = the deployment default (all L0 types)")
 parser.add_argument("--out", default=None, help="default: <checkpoint dir>/ensemble/friction_check_<mu>.json")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
@@ -52,6 +53,10 @@ dev, N, dt = env.device, env.num_envs, float(env.step_dt)
 actor, _, info = build_from_checkpoint(args.checkpoint, N, dev)
 ids = torch.arange(N, device=dev)
 low = ids[: N // 2]
+if args.terrain_type and env._has_terrain_levels:
+    col = env.terrain_type_names.index(args.terrain_type)
+    env.set_terrain_cells(ids, 0, col)
+    print(f"[friction] all robots on level 0, column {col} ({args.terrain_type})", flush=True)
 env.set_friction(low, args.mu, hold=True)
 reset_in_place(env, ids, dcfg.cmd_speed)
 mat = wp.to_torch(env._robot.root_view.get_material_properties())
@@ -96,7 +101,7 @@ for k in range(steps):
         c = contact[sel]
         ratio[name].append((ft[sel] / fn[sel].clamp_min(1e-6))[c].cpu())
         slip[name].append(vs[sel][c].cpu())
-res = {"checkpoint": args.checkpoint, "mu_set": args.mu, "ground_mu": ground_mu, "combine_mode": combine, "effective_mu_expected": args.mu * ground_mu if combine == "multiply" else None,
+res = {"checkpoint": args.checkpoint, "terrain_type": args.terrain_type, "mu_set": args.mu, "ground_mu": ground_mu, "combine_mode": combine, "effective_mu_expected": args.mu * ground_mu if combine == "multiply" else None,
        "readback": readback, "seconds": args.seconds, "num_envs": N, "env_applied": applied}
 for name in ("low", "nominal"):
     r = torch.cat(ratio[name]).numpy()
@@ -106,7 +111,7 @@ for name in ("low", "nominal"):
                  "stance_tibia_speed_mean_p90": [float(s.mean()), float(np.percentile(s, 90))],
                  "progress_rate_m_per_min": float(prog[sel].mean() / ((steps - settle) * dt / 60.0)), "falls": float(falls[sel].sum()), "contact_samples": int(len(r))}
 print(json.dumps(res, indent=1))
-out = args.out or os.path.join(os.path.dirname(args.checkpoint), "ensemble", f"friction_check_{args.mu:g}.json")
+out = args.out or os.path.join(os.path.dirname(args.checkpoint), "ensemble", f"friction_check_{args.mu:g}" + (f"_{args.terrain_type}" if args.terrain_type else "") + ".json")
 os.makedirs(os.path.dirname(out), exist_ok=True)
 json.dump(res, open(out, "w"), indent=1)
 print("[friction] wrote", out)
