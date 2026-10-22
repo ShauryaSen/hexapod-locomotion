@@ -34,7 +34,7 @@ manifest = []
 def rec(name, task, ckpt, cmd, extra, meta):
     log = f"logs/videos/showcase_logs/{name}.log"
     os.makedirs(os.path.join(ROOT, "logs/videos/showcase_logs"), exist_ok=True)
-    out = f"/workspace/isaaclab/{a.out.replace('logs/', '', 1)}/{name}"
+    out = f"/workspace/isaaclab/{a.out}/{name}"  # a.out is relative to ~/src/isaaclab-learning, mounted at /workspace/isaaclab/logs -> keep the logs/ prefix
     cmdline = ["hexapod/tools/spark_run.sh", log, "--", "env", "PYTHONPATH=/workspace/learning", "./isaaclab.sh", "-p",
                "/workspace/learning/hexapod/tools/record_video.py", "--headless", "--enable_cameras", "--task", task,
                "--checkpoint", ckpt, "--cmd", str(cmd), "--out", out] + extra
