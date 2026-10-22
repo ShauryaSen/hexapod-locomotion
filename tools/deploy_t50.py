@@ -72,9 +72,9 @@ dcfg = C.DeployCfg(task=args.task, env_seed=args.env_seed)
 if args.levels:
     dcfg.levels = tuple(args.levels)
 ucfg = C.UpdaterCfg(budget_min=float("inf"))
-if args.steps_per_batch:
+if args.steps_per_batch is not None:
     ucfg.steps_per_batch = args.steps_per_batch
-if args.lr:
+if args.lr is not None:
     ucfg.learning_rate = args.lr
 if args.kl_weight is not None:
     ucfg.kl_anchor_weight = args.kl_weight

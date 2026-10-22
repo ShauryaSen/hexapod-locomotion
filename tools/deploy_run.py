@@ -71,9 +71,9 @@ if args.fall_recovery_s is not None:
 if args.reposition_s is not None:
     dcfg.reposition_s = args.reposition_s
 ucfg = C.UpdaterCfg()
-if args.steps_per_batch:
+if args.steps_per_batch is not None:
     ucfg.steps_per_batch = args.steps_per_batch
-if args.lr:
+if args.lr is not None:
     ucfg.learning_rate = args.lr
 if args.kl_weight is not None:
     ucfg.kl_anchor_weight = args.kl_weight
