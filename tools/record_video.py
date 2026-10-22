@@ -45,7 +45,7 @@ import yaml  # noqa: E402
 import hexapod  # noqa: F401, E402
 from isaaclab_tasks.utils import parse_env_cfg  # noqa: E402
 
-PARAM_KEYS = ("action_scale", "gait_clock_enabled", "gait_period_s", "command_forward_only", "command_yaw_rate_max", "perceptive", "step_cap", "terrain_version")
+PARAM_KEYS = ("action_scale", "gait_clock_enabled", "gait_period_s", "command_forward_only", "command_yaw_rate_max", "perceptive", "step_cap", "terrain_version", "terrain_stair_tread", "terrain_stair_platform")
 run_dir = args.run_dir or os.path.dirname(args.checkpoint)
 env_cfg = parse_env_cfg(args.task, device=args.device, num_envs=args.num_envs)
 params_path = os.path.join(run_dir, "params", "env.yaml")
@@ -73,8 +73,14 @@ if env_cfg.terrain.terrain_type == "generator" and (getattr(env_cfg, "terrain_ve
     _kw = {"version": getattr(env_cfg, "terrain_version", 1)}
     if env_cfg.step_cap is not None:
         _kw["step_cap"] = env_cfg.step_cap
+    if getattr(env_cfg, "terrain_stair_tread", None) is not None:
+        _kw["tread"] = env_cfg.terrain_stair_tread
+    if getattr(env_cfg, "terrain_stair_platform", None) is not None:
+        _kw["stair_platform"] = env_cfg.terrain_stair_platform
     env_cfg.terrain.terrain_generator = make_hexapod_terrains_cfg(**_kw)
     env_cfg.step_cap, env_cfg.terrain_version = None, 1  # already applied; stop the env from rebuilding it again
+    env_cfg.terrain_stair_tread = env_cfg.terrain_stair_platform = None
+    print(f"[record_video] terrain rebuilt with {_kw}")
     print("[record_video] terrain columns:", terrain_type_names(env_cfg.terrain.terrain_generator))
 if env_cfg.terrain.terrain_type == "generator" and (args.levels or args.spread):
     if args.spread and not args.levels:
