@@ -36,6 +36,7 @@ parser.add_argument("--num_envs", type=int, default=16)
 parser.add_argument("--factor", default="payload", choices=["payload", "motor", "friction"])
 parser.add_argument("--values", type=float, nargs="*", default=None, help="R3 + outward step: test values of the factor tried in this order (inward, e.g. motor 0.5 0.6 0.7, or outward, e.g. payload 2.5 3.5 4.5); stops at the first value whose frozen-arm drop is >= --min_drop_frac AND that is recoverable. Default: the ScheduleCfg test value")
 parser.add_argument("--recoverable_frac", type=float, default=0.5, help="R3: a value counts as recoverable when the adapting arm reaches T50 in at least this fraction of deployments (ASSUMED)")
+parser.add_argument("--frozen_from", default=None, help="reuse the frozen arm's streams from this directory (a previous <out>/never or <out>/value_x/never) instead of running it again; only valid with a single --values entry")
 parser.add_argument("--min_drop_frac", type=float, default=0.10, help="a value counts as consequential when the frozen arm loses at least this fraction of its nominal progress rate; below it the adapting arm is skipped and the next value is tried (supervisor steer 2026-10-21; threshold ASSUMED)")
 parser.add_argument("--t_on", type=float, default=60.0)
 parser.add_argument("--minutes", type=float, default=12.0)
@@ -207,7 +208,14 @@ for value in values:
     sub = out_root if len(values) == 1 else os.path.join(out_root, f"value_{value:g}")
     os.makedirs(sub, exist_ok=True)
     print(f"[t50] ===== {args.factor} = {value} =====", flush=True)
-    runs = run_value(value, sub, [A_])
+    if args.frozen_from:
+        assert len(values) == 1, "--frozen_from needs exactly one value"
+        from hexapod.deploy.streams import StreamLog
+
+        runs = {A_: StreamLog.load(args.frozen_from)[0]}
+        print(f"[t50] frozen arm streams reused from {args.frozen_from}", flush=True)
+    else:
+        runs = run_value(value, sub, [A_])
     # frozen-arm drop of the progress rate (steady state after the change vs before)
     tt = runs[A_]["t_s"][:, 0]
     before = tt <= args.t_on
