@@ -28,6 +28,8 @@ parser.add_argument("--out", required=True)
 parser.add_argument("--step_cap", type=float, default=None)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--version", type=int, default=1)
+parser.add_argument("--tread", type=float, default=None)
+parser.add_argument("--platform", type=float, default=None)
 parser.add_argument("--dump_tile", nargs=2, default=None, metavar=("TYPE", "LEVEL"), help="print a coarse 2-D height grid of one tile (mm, relative to the origin)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
@@ -42,7 +44,14 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from hexapod.hexapod_terrains_cfg import HEXAPOD_TERRAINS_CFG, STEP_CAP, make_hexapod_terrains_cfg, terrain_type_names  # noqa: E402
 
-cfg = make_hexapod_terrains_cfg(step_cap=args.step_cap, version=args.version) if (args.step_cap is not None or args.version != 1) else HEXAPOD_TERRAINS_CFG
+_kw = {"version": args.version}
+if args.step_cap is not None:
+    _kw["step_cap"] = args.step_cap
+if args.tread is not None:
+    _kw["tread"] = args.tread
+if args.platform is not None:
+    _kw["stair_platform"] = args.platform
+cfg = make_hexapod_terrains_cfg(**_kw) if len(_kw) > 1 or args.version != 1 else HEXAPOD_TERRAINS_CFG
 cfg.seed = args.seed
 gen = cfg.class_type(cfg=cfg, device="cpu")
 mesh = gen.terrain_mesh
