@@ -47,6 +47,11 @@ class KLAnchoredPPO:
         self.last_kl_pi0 = torch.full((self.n,), float("nan"), device=device)
         self.last_stats: dict[str, torch.Tensor] = {}
         self._ar = torch.arange(self.n, device=device)
+        # per-deployment overrides (used by tools/deploy_sweep_updater.py to sweep nuisance knobs in one process;
+        # defaults reproduce the shared cfg exactly)
+        self.kl_w = torch.full((self.n,), float(cfg.kl_anchor_weight), device=device)
+        self.explore_enabled = torch.ones(self.n, dtype=torch.bool, device=device)
+        self.update_enabled = torch.ones(self.n, dtype=torch.bool, device=device)
 
     # ---- acting ---------------------------------------------------------------------------------------------
     @torch.no_grad()
@@ -54,6 +59,7 @@ class KLAnchoredPPO:
         """``obs`` (n, obs). Returns act, logp, value, mean, std. Exploration noise only where ``explore``."""
         mean, std = self.actor(obs)
         noise = torch.randn(mean.shape, device=obs.device, generator=gen)
+        explore = explore & self.explore_enabled
         act = torch.where(explore.unsqueeze(1), mean + std * noise, mean)
         logp = self.actor.log_prob(mean, std, act)
         value = self.critic(obs)
@@ -96,10 +102,12 @@ class KLAnchoredPPO:
         full = self.ptr >= self.T
         if not bool(full.any()):
             return full
-        self._update(full, next_obs)
+        if bool((full & self.update_enabled).any()):
+            self._update(full & self.update_enabled, next_obs)
         self.ptr[full] = 0
-        self.n_updates[full] += 1
-        return full
+        done = full & self.update_enabled
+        self.n_updates[done] += 1
+        return done
 
     def _gae(self, full: torch.Tensor, next_obs: torch.Tensor):
         cfg = self.cfg
@@ -156,7 +164,7 @@ class KLAnchoredPPO:
                     v_loss = ((value - ret_b) ** 2).mean(1)
                 ent = self.actor.entropy(std).mean(1)
                 kl0 = self.actor.kl(mean, std, pi0_mean[sl].transpose(0, 1), pi0_std[sl].transpose(0, 1)).mean(1)
-                loss_per = surr + cfg.value_loss_coef * v_loss - cfg.entropy_coef * ent + cfg.kl_anchor_weight * kl0
+                loss_per = surr + cfg.value_loss_coef * v_loss - cfg.entropy_coef * ent + self.kl_w * kl0
                 loss = (loss_per * fullf).sum()
                 self.opt.zero_grad()
                 loss.backward()
