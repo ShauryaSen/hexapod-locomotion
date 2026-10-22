@@ -26,6 +26,8 @@ while true; do
   for pid in $(pgrep -f "$pattern"); do
     args=$(tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null) || continue
     case "$args" in *python3*) ;; *) continue ;; esac
+    # only Kit jobs launched through spark_run.sh (the self-test, benchmark, calibrate and summarize tools are plain python)
+    case "$args" in *--headless*) ;; *) continue ;; esac
     # the log is the LOGFILE of the spark_run.sh wrapper whose command line carries the same tool arguments
     # (the python runs inside a container, so its host parent chain does not reach the wrapper)
     key=$(echo "$args" | sed -E 's#.*tools/deploy_[a-z_0-9]*\.py##' | xargs)
