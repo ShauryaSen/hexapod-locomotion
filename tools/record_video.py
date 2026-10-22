@@ -30,6 +30,7 @@ parser.add_argument("--out", required=True)
 parser.add_argument("--camera", default="side", choices=["side", "behind", "high"], help="static camera relative to env 0's cell (rough) or tracking offsets (flat): side (1 m to +x), behind (0.6 m behind, 0.3 m up, looking along -y), high (3 m back, 2 m up)")
 parser.add_argument("--cam_eye", type=float, nargs=3, default=None, help="explicit world camera eye (overrides --camera)")
 parser.add_argument("--cam_lookat", type=float, nargs=3, default=None)
+parser.add_argument("--column", type=int, default=1, help="rough env: terrain column for all envs (and the camera); use the higher column of a type pair")
 parser.add_argument("--spread", action="store_true", help="rough env: spread the envs over every level and column (env i -> level i %% rows, column (i // rows) %% cols)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
@@ -65,6 +66,16 @@ env_cfg.episode_length_s = args.steps / 50.0 + 5.0
 if env_cfg.terrain.terrain_type == "generator":
     env_cfg.terrain.max_init_terrain_level = None
 env_cfg.scene.env_spacing = 1.0 if env_cfg.terrain.terrain_type == "plane" else env_cfg.scene.env_spacing
+if env_cfg.terrain.terrain_type == "generator" and (getattr(env_cfg, "terrain_version", 1) != 1 or getattr(env_cfg, "step_cap", None) is not None):
+    # same rebuild the env does in __init__, so the camera uses the real grid size
+    from hexapod.hexapod_terrains_cfg import make_hexapod_terrains_cfg, terrain_type_names
+
+    _kw = {"version": getattr(env_cfg, "terrain_version", 1)}
+    if env_cfg.step_cap is not None:
+        _kw["step_cap"] = env_cfg.step_cap
+    env_cfg.terrain.terrain_generator = make_hexapod_terrains_cfg(**_kw)
+    env_cfg.step_cap, env_cfg.terrain_version = None, 1  # already applied; stop the env from rebuilding it again
+    print("[record_video] terrain columns:", terrain_type_names(env_cfg.terrain.terrain_generator))
 if env_cfg.terrain.terrain_type == "generator" and (args.levels or args.spread):
     if args.spread and not args.levels:
         args.levels = [0]
@@ -72,7 +83,7 @@ if env_cfg.terrain.terrain_type == "generator" and (args.levels or args.spread):
     # terrain cell env 0 is pinned to (level = args.levels[0], column 1). Static side view of the first ~2 m of walking.
     g = env_cfg.terrain.terrain_generator
     ox = (args.levels[0] + 0.5) * g.size[0] - g.num_rows * g.size[0] / 2
-    oy = (1 + 0.5) * g.size[1] - g.num_cols * g.size[1] / 2
+    oy = (args.column + 0.5) * g.size[1] - g.num_cols * g.size[1] / 2
     env_cfg.viewer.origin_type = "world"
     if args.camera == "side":
         env_cfg.viewer.eye, env_cfg.viewer.lookat = (ox + 1.0, oy - 1.0, 0.45), (ox, oy - 1.0, 0.05)
@@ -121,7 +132,7 @@ if raw._has_terrain_levels and args.spread:
 elif raw._has_terrain_levels and args.levels:
     n_cols = raw._terrain.terrain_origins.shape[1]
     levels = torch.tensor(args.levels, device=dev)[ids % len(args.levels)]
-    types = (ids * 2 + 1) % n_cols  # odd columns: the next tile along -y is the same type
+    types = torch.full_like(ids, args.column)  # one column for every env (pick the higher column of a type pair)
     raw.set_terrain_cells(ids, levels, types)
 obs, _ = env.reset()
 raw._commands[:, 0], raw._commands[:, 1], raw._commands[:, 2] = 0.0, -args.cmd, 0.0
