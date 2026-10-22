@@ -155,4 +155,16 @@ print(text)
 open(os.path.join(args.out, "terrain_audit.md"), "w").write(text + "\n")
 json.dump({"cfg_size": cfg.size, "rows": cfg.num_rows, "cols": cfg.num_cols, "border": cfg.border_width, "step_cap": args.step_cap or STEP_CAP, "names": names, "table": rows_tbl}, open(os.path.join(args.out, "terrain_audit.json"), "w"), indent=1)
 print("[audit] wrote", os.listdir(args.out))
+def _exit_watchdog(seconds: float = 120.0):
+    """Kit sometimes never returns from env.close()/app.close() (measured: finished evals lingering for hours at 110%
+    CPU, holding a GPU slot). Force the process to exit after the results are on disk."""
+    import os, threading, time
+
+    def _kill():
+        time.sleep(seconds)
+        os._exit(0)
+
+    threading.Thread(target=_kill, daemon=True).start()
+
+_exit_watchdog()
 app.close()

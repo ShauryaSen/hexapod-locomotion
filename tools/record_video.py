@@ -152,6 +152,18 @@ for _ in range(args.steps):
     falls += int(terminated.sum().item())
     raw._commands[:, 0], raw._commands[:, 1], raw._commands[:, 2] = 0.0, -args.cmd, 0.0
 print(f"[record_video] {args.steps} steps, {N} envs, cmd {args.cmd}, falls {falls}, mean speed along cmd {(-raw._robot.data.root_lin_vel_b.torch[:, 1]).mean().item():.3f}")
+def _exit_watchdog(seconds: float = 120.0):
+    """Kit sometimes never returns from env.close()/app.close() (measured: finished evals lingering for hours at 110%
+    CPU, holding a GPU slot). Force the process to exit after the results are on disk."""
+    import os, threading, time
+
+    def _kill():
+        time.sleep(seconds)
+        os._exit(0)
+
+    threading.Thread(target=_kill, daemon=True).start()
+
+_exit_watchdog()
 env.close()
 print("[record_video] wrote", os.listdir(args.out))
 app.close()
