@@ -141,7 +141,7 @@ def _make_v2(step_cap: float, tread: float, grid_width: float, stair_platform: f
             border_width=HF_BORDER, holes=False
         ),
         "boxes": terrain_gen.MeshRandomGridTerrainCfg(
-            proportion=1.0, grid_width=grid_width, grid_height_range=(0.0025, step_cap / 2), platform_width=PLATFORM_WIDTH
+            proportion=1.0, grid_width=grid_width, grid_height_range=(0.0025, step_cap / 2), platform_width=stair_platform
         ),
     }
     return TerrainGeneratorCfg(

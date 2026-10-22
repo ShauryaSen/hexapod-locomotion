@@ -91,6 +91,7 @@ class HexapodEnv(DirectRLEnv):
                 "dof_acc_l2",
                 "action_rate_l2",
                 "feet_air_time",
+                "swing_clearance",
                 "undesired_contacts",
                 "flat_orientation_l2",
                 "termination",
@@ -99,6 +100,8 @@ class HexapodEnv(DirectRLEnv):
         # Get specific body indices
         self._base_id, _ = self._contact_sensor.find_sensors("body")
         self._feet_ids, _ = self._contact_sensor.find_sensors(".*_tibia")
+        self._tibia_body_ids = [self._robot.body_names.index(f"{l}_tibia") for l in ("lf", "lm", "lr", "rf", "rm", "rr")]
+        self._toe_offset = torch.tensor([0.130, 0.0, 0.0], device=self.device)  # toe tip in the tibia frame
         self._undesired_contact_body_ids, _ = self._contact_sensor.find_sensors(".*_(coxa|femur)")  # measured: a trained policy sat on its coxas (37 N) and nothing penalized it
 
         # terrain curriculum bookkeeping
@@ -330,6 +333,20 @@ class HexapodEnv(DirectRLEnv):
         air_time = torch.sum((last_air_time - self.cfg.feet_air_time_threshold) * first_contact, dim=1) * (
             torch.linalg.norm(self._commands[:, :2], dim=1) > 0.1 * self.command_lin_vel_max
         )
+        # swing clearance: swing toe height above the mean height of the stance toes (0 when the scale is 0)
+        if self.cfg.swing_clearance_reward_scale != 0.0:
+            from isaaclab.utils.math import quat_apply
+
+            pos = self._robot.data.body_link_pos_w.torch[:, self._tibia_body_ids]
+            quat = self._robot.data.body_link_quat_w.torch[:, self._tibia_body_ids]
+            toe_z = (pos + quat_apply(quat.reshape(-1, 4), self._toe_offset.expand(pos.shape[0] * 6, 3)).reshape(-1, 6, 3))[..., 2]
+            in_contact = torch.linalg.norm(self._contact_sensor.data.net_forces_w.torch[:, self._feet_ids], dim=-1) > 1.0
+            n_c = in_contact.float().sum(dim=1).clamp_min(1.0)
+            ref = torch.where(in_contact.any(dim=1), (toe_z * in_contact).sum(dim=1) / n_c, toe_z.min(dim=1).values)
+            lift = ((toe_z - ref[:, None]).clamp(0.0, self.cfg.swing_clearance_target) / self.cfg.swing_clearance_target) * (~in_contact)
+            swing_clear = lift.sum(dim=1) * (torch.linalg.norm(self._commands[:, :2], dim=1) > 0.1 * self.command_lin_vel_max)
+        else:
+            swing_clear = torch.zeros(self.num_envs, device=self.device)
         # undesired contacts
         net_contact_forces = self._contact_sensor.data.net_forces_w_history.torch
         is_contact = (
@@ -349,6 +366,7 @@ class HexapodEnv(DirectRLEnv):
             "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
             "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
             "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
+            "swing_clearance": swing_clear * self.cfg.swing_clearance_reward_scale * self.step_dt,
             "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
             # _get_dones runs before _get_rewards, so reset_terminated already holds this step's deaths

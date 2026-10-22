@@ -164,6 +164,12 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     joint_accel_reward_scale = -2.5e-9  # ANYmal: -2.5e-7
     action_rate_reward_scale = -0.01
     feet_air_time_reward_scale = 0.5
+    # Swing clearance (added 2026-10-22 for stairs; 0 = off, the behaviour before this field existed). For every
+    # foot not in contact while the robot is commanded to move, reward min(toe height above the mean height of the
+    # feet in contact, target) / target. Blind-policy proxy for "lift the feet over an unseen riser" (legged_gym-style
+    # feet-clearance term). Default target 0.06 m: just above the 0.052 m stair cap.
+    swing_clearance_reward_scale = 0.0
+    swing_clearance_target = 0.06
     # A touchdown pays (swing time - threshold): below it, steps are penalized. ANYmal uses 0.5 s; for this
     # robot that left standing (0 reward) strictly better than any first short step, so it never stepped.
     feet_air_time_threshold = 0.2  # [s]
@@ -229,7 +235,7 @@ class HexapodRoughEnvCfg(HexapodFlatEnvCfg):
     terrain_stair_tread: float | None = None
     """Terrain v2 stair tread [m]; None = hexapod_terrains_cfg.STAIR_TREAD (0.12). Added for the stairs doability study."""
     terrain_stair_platform: float | None = None
-    """Terrain v2 stair apex/pit platform width [m]; None = PLATFORM_WIDTH (0.5)."""
+    """Terrain v2 platform width [m] of the stair (apex / pit) and box tiles; None = PLATFORM_WIDTH (0.5)."""
     """1 = the 2026-10-21 night set (rough, slopes, obstacles, grid); 2 = Shaurya's set (rough, slopes, stairs both
     ways, boxes up and down). With version 2 the env always rebuilds the generator config."""
 
