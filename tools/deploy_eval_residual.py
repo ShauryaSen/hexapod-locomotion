@@ -27,6 +27,7 @@ parser.add_argument("--num_envs", type=int, default=16)
 parser.add_argument("--factor", default="payload", choices=["payload", "motor", "friction"])
 parser.add_argument("--t_on", type=float, default=60.0)
 parser.add_argument("--t_off", type=float, default=None)
+parser.add_argument("--value", type=float, default=None, help="test value of the factor (default: ScheduleCfg's; R3 inward stepping, e.g. motor 0.6)")
 parser.add_argument("--minutes", type=float, default=3.0)
 parser.add_argument("--arm", default="never")
 parser.add_argument("--levels", type=int, nargs="+", default=None)
@@ -52,7 +53,10 @@ dcfg = C.DeployCfg(task=args.task, env_seed=args.env_seed)
 if args.levels:
     dcfg.levels = tuple(args.levels)
 scfg, ucfg, detcfg = C.ScheduleCfg(), C.UpdaterCfg(), C.DetectorCfg()
-out_dir = args.out_dir or os.path.join(os.path.dirname(args.ensemble), f"residual_{args.factor}" + ("" if args.arm == "never" else f"_{args.arm}"))
+if args.value is not None:
+    setattr(scfg, {"payload": "payload_kg", "motor": "motor_strength", "friction": "friction"}[args.factor], args.value)
+value = getattr(scfg, {"payload": "payload_kg", "motor": "motor_strength", "friction": "friction"}[args.factor])
+out_dir = args.out_dir or os.path.join(os.path.dirname(args.ensemble), f"residual_{args.factor}" + (f"_{args.value:g}" if args.value is not None else "") + ("" if args.arm == "never" else f"_{args.arm}"))
 os.makedirs(out_dir, exist_ok=True)
 
 env, applied = make_env(dcfg, args.checkpoint, args.num_envs, args.device, args.run_dir)
@@ -67,7 +71,7 @@ arm = make_arm(args.arm, N, C.ArmCfg(name=args.arm), ucfg, detcfg, dev, dcfg.gai
 applier = ScheduleApplier(env, schedules, scfg)
 runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"])
 summary = runner.run(args.minutes)
-meta = {"checkpoint": args.checkpoint, "ensemble": args.ensemble, "num_envs": N, "factor": args.factor, "t_on": args.t_on, "t_off": args.t_off, "arm": args.arm, "env_applied": applied, "nominal_mu": float(ensemble.nominal_mu), "nominal_sigma": float(ensemble.nominal_sigma), "deploy_cfg": C.to_dict(dcfg)}
+meta = {"checkpoint": args.checkpoint, "ensemble": args.ensemble, "num_envs": N, "factor": args.factor, "value": value, "t_on": args.t_on, "t_off": args.t_off, "arm": args.arm, "env_applied": applied, "nominal_mu": float(ensemble.nominal_mu), "nominal_sigma": float(ensemble.nominal_sigma), "deploy_cfg": C.to_dict(dcfg)}
 runner.stream.save(out_dir, meta)
 sched.save(os.path.join(out_dir, "schedule_manual.json"))
 json.dump(summary, open(os.path.join(out_dir, "summary.json"), "w"), indent=1)
@@ -108,7 +112,7 @@ try:
         ax.grid(alpha=0.3)
     axes[1].axhline(3.0, color="r", ls="--", lw=0.8)
     axes[-1].set_xlabel("robot time [s]")
-    fig.suptitle(f"{args.factor} on at {args.t_on:.0f} s, {N} deployments, {os.path.basename(args.checkpoint)}, arm {args.arm}")
+    fig.suptitle(f"{args.factor} = {value:g} on at {args.t_on:.0f} s, {N} deployments, {os.path.basename(args.checkpoint)}, arm {args.arm}")
     fig.tight_layout()
     fig.savefig(os.path.join(out_dir, "residual_vs_time.png"), dpi=120)
     print("[residual] wrote", os.path.join(out_dir, "residual_vs_time.png"))
