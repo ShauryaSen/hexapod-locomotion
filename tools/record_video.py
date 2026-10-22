@@ -150,6 +150,7 @@ obs, _ = env.reset()
 raw._commands[:, 0], raw._commands[:, 1], raw._commands[:, 2] = 0.0, -args.cmd, 0.0
 obs = raw._get_observations()["policy"]
 falls = 0
+speed_sum, speed_n = 0.0, 0
 cam = getattr(raw, "viewport_camera_controller", None)
 eye_off = torch.tensor(env_cfg.viewer.eye, device=dev)
 look_off = torch.tensor(env_cfg.viewer.lookat, device=dev)
@@ -173,8 +174,10 @@ for _ in range(args.steps):
     obs_d, _, terminated, _, _ = env.step(act)
     obs = obs_d["policy"]
     falls += int(terminated.sum().item())
+    speed_sum += (-raw._robot.data.root_lin_vel_b.torch[:, 1]).mean().item()
+    speed_n += 1
     raw._commands[:, 0], raw._commands[:, 1], raw._commands[:, 2] = 0.0, -args.cmd, 0.0
-print(f"[record_video] {args.steps} steps, {N} envs, cmd {args.cmd}, falls {falls}, mean speed along cmd {(-raw._robot.data.root_lin_vel_b.torch[:, 1]).mean().item():.3f}")
+print(f"[record_video] {args.steps} steps, {N} envs, cmd {args.cmd}, falls {falls}, mean speed along cmd {speed_sum / max(speed_n, 1):.3f}, final speed {(-raw._robot.data.root_lin_vel_b.torch[:, 1]).mean().item():.3f}")
 def _exit_watchdog(seconds: float = 120.0):
     """Kit sometimes never returns from env.close()/app.close() (measured: finished evals lingering for hours at 110%
     CPU, holding a GPU slot). Force the process to exit after the results are on disk."""
