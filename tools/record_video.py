@@ -30,6 +30,7 @@ parser.add_argument("--out", required=True)
 parser.add_argument("--camera", default="side", choices=["side", "behind", "high"], help="static camera relative to env 0's cell (rough) or tracking offsets (flat): side (1 m to +x), behind (0.6 m behind, 0.3 m up, looking along -y), high (3 m back, 2 m up)")
 parser.add_argument("--cam_eye", type=float, nargs=3, default=None, help="explicit world camera eye (overrides --camera)")
 parser.add_argument("--cam_lookat", type=float, nargs=3, default=None)
+parser.add_argument("--lateral_spread", type=float, default=0.0, help="rough env: spread the robots of one cell across the tile, x offsets in [-a, +a] m (they walk along -y)")
 parser.add_argument("--column", type=int, default=1, help="rough env: terrain column for all envs (and the camera); use the higher column of a type pair")
 parser.add_argument("--spread", action="store_true", help="rough env: spread the envs over every level and column (env i -> level i %% rows, column (i // rows) %% cols)")
 AppLauncher.add_app_launcher_args(parser)
@@ -140,6 +141,8 @@ elif raw._has_terrain_levels and args.levels:
     levels = torch.tensor(args.levels, device=dev)[ids % len(args.levels)]
     types = torch.full_like(ids, args.column)  # one column for every env (pick the higher column of a type pair)
     raw.set_terrain_cells(ids, levels, types)
+    if args.lateral_spread > 0 and N > 1:
+        raw._terrain.env_origins[:, 0] += torch.linspace(-args.lateral_spread, args.lateral_spread, N, device=dev)
 obs, _ = env.reset()
 raw._commands[:, 0], raw._commands[:, 1], raw._commands[:, 2] = 0.0, -args.cmd, 0.0
 obs = raw._get_observations()["policy"]
