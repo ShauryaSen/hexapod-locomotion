@@ -27,6 +27,7 @@ parser.add_argument("--width", type=int, default=1920)
 parser.add_argument("--height", type=int, default=1080)
 parser.add_argument("--out", required=True)
 parser.add_argument("--prefix", default="terrain_v21")
+parser.add_argument("--rows", type=int, nargs="+", default=[0, 3, 5, 9], help="levels that get a robot on every column (camera rendering is killed for memory above ~40-60 robots on the terrain mesh)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 args.enable_cameras = True
@@ -61,7 +62,7 @@ if hasattr(env_cfg, "terrain_tile_size"):
     env_cfg.terrain_tile_size = None
 env_cfg.terrain.max_init_terrain_level = None
 rows, cols = gen.num_rows, gen.num_cols
-env_cfg.scene.num_envs = rows * cols
+env_cfg.scene.num_envs = len(args.rows) * cols
 env_cfg.spread_resets = False
 env_cfg.terrain_curriculum = False
 env_cfg.command_curriculum = False
@@ -79,7 +80,9 @@ env = gym.make(task, cfg=env_cfg, render_mode="rgb_array").unwrapped
 dev = env.device
 N = env.num_envs
 ids = torch.arange(N, device=dev)
-env.set_terrain_cells(ids, ids // cols, ids % cols)
+row_t = torch.tensor(args.rows, device=dev)
+env.set_terrain_cells(ids, row_t[ids // cols], ids % cols)
+print(f"[stills] env created: {N} robots on levels {args.rows} x {cols} columns", flush=True)
 
 ck = torch.load(args.checkpoint, map_location=dev, weights_only=False)
 sd = ck["actor_state_dict"]
@@ -96,12 +99,14 @@ for i, li in enumerate(layers):
 actor = nn.Sequential(*mods).to(dev).eval()
 
 obs = env.reset()[0]["policy"]
+print("[stills] reset done, walking", flush=True)
 for _ in range(int(args.settle_s / env.step_dt)):
     env._commands[:, 0], env._commands[:, 1], env._commands[:, 2] = 0.0, -args.cmd, 0.0
     with torch.no_grad():
         obs = env.step(actor(obs))[0]["policy"]
 
 origins = env._terrain.terrain_origins.cpu().numpy()  # (rows, cols, 3)
+print("[stills] walking done, rendering shots", flush=True)
 names = terrain_type_names(gen)
 col_of = {n: max(i for i, m in enumerate(names) if m == n) for n in set(names)}
 L5 = min(5, rows - 1)

@@ -50,6 +50,10 @@ for attempt in $(seq 1 "$max_attempts"); do
     done
     wait "$pid"; rc=$?
     if [ "$stalled" = 1 ]; then mv "$log" "$log.attempt$attempt"; sleep 30; continue; fi
+    if [ "$rc" != 0 ] && grep -qE "line [0-9]+: +[0-9]+ Killed" "$log"; then
+      echo "[spark_run] attempt $attempt: process was SIGKILLed (likely out of memory); not retrying" >> "$log"
+      exit "$rc"
+    fi
     if [ "$rc" != 0 ] && grep -q "There was an error running python" "$log" && ! grep -q "Traceback (most recent call last)" "$log"; then
       echo "[spark_run] attempt $attempt: silent python exit after AppLauncher init" >> "$log"
     else
