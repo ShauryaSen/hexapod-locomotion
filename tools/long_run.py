@@ -49,7 +49,7 @@ import yaml  # noqa: E402
 import hexapod  # noqa: F401, E402
 from isaaclab_tasks.utils import parse_env_cfg  # noqa: E402
 
-PARAM_KEYS = ("action_scale", "gait_clock_enabled", "gait_period_s", "command_forward_only", "command_yaw_rate_max", "perceptive", "step_cap")
+PARAM_KEYS = ("action_scale", "gait_clock_enabled", "gait_period_s", "command_forward_only", "command_yaw_rate_max", "perceptive", "step_cap", "terrain_version")
 
 run_dir = args.run_dir or os.path.dirname(args.checkpoint)
 env_cfg = parse_env_cfg(args.task, device=args.device, num_envs=args.num_envs)
