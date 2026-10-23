@@ -30,6 +30,8 @@ parser.add_argument("--out", required=True)
 parser.add_argument("--camera", default="side", choices=["side", "behind", "high"], help="static camera relative to env 0's cell (rough) or tracking offsets (flat): side (1 m to +x), behind (0.6 m behind, 0.3 m up, looking along -y), high (3 m back, 2 m up)")
 parser.add_argument("--cam_eye", type=float, nargs=3, default=None, help="explicit world camera eye (overrides --camera)")
 parser.add_argument("--cam_lookat", type=float, nargs=3, default=None)
+parser.add_argument("--follow", type=float, nargs=6, default=None, metavar=("EX", "EY", "EZ", "LX", "LY", "LZ"), help="move the camera with env 0 every step: eye = robot + (EX,EY,EZ), target = robot + (LX,LY,LZ)")
+parser.add_argument("--stagger", type=float, default=0.0, help="with --lateral_spread: every other robot starts this far behind (+y) the first row")
 parser.add_argument("--lateral_spread", type=float, default=0.0, help="rough env: spread the robots of one cell across the tile, x offsets in [-a, +a] m (they walk along -y)")
 parser.add_argument("--column", type=int, default=1, help="rough env: terrain column for all envs (and the camera); use the higher column of a type pair")
 parser.add_argument("--spread", action="store_true", help="rough env: spread the envs over every level and column (env i -> level i %% rows, column (i // rows) %% cols)")
@@ -142,7 +144,13 @@ elif raw._has_terrain_levels and args.levels:
     types = torch.full_like(ids, args.column)  # one column for every env (pick the higher column of a type pair)
     raw.set_terrain_cells(ids, levels, types)
     if args.lateral_spread > 0 and N > 1:
-        raw._terrain.env_origins[:, 0] += torch.linspace(-args.lateral_spread, args.lateral_spread, N, device=dev)
+        if args.stagger > 0:
+            n_front = (N + 1) // 2
+            xs = torch.linspace(-args.lateral_spread, args.lateral_spread, n_front, device=dev)
+            raw._terrain.env_origins[:, 0] += xs[ids % n_front]
+            raw._terrain.env_origins[:, 1] += args.stagger * (ids >= n_front).float()
+        else:
+            raw._terrain.env_origins[:, 0] += torch.linspace(-args.lateral_spread, args.lateral_spread, N, device=dev)
         # off the centre platform the ground can be higher (pits, inverted slopes): spawn a little higher and let the
         # robots drop onto the terrain instead of starting inside it
         raw._terrain.env_origins[:, 2] += 0.06
@@ -157,6 +165,13 @@ look_off = torch.tensor(env_cfg.viewer.lookat, device=dev)
 
 
 def follow_env0():
+    if args.follow is not None:
+        from isaacsim.core.rendering_manager import ViewportManager
+
+        pos = raw._robot.data.root_pos_w.torch[0].tolist()
+        ex, ey, ez, lx, ly, lz = args.follow
+        ViewportManager.set_camera_view("/OmniverseKit_Persp", eye=[pos[0] + ex, pos[1] + ey, pos[2] + ez], target=[pos[0] + lx, pos[1] + ly, pos[2] + lz])
+        return
     # the viewer's asset_root tracking does not follow a robot that was teleported to a terrain cell; place the
     # camera relative to env 0's robot every step instead (same offsets as the ViewerCfg)
     if cam is None:
