@@ -293,7 +293,11 @@ def summarize(results):
             {**{k: v for k, v in c.items() if k != "cols"}, "n": n,
              "success": r["success"].mean().item(), "falls": r["fell"].mean().item(),
              "speed_err": r["speed_err"].mean().item(), "mean_v": r["mean_v_along_cmd"].mean().item(),
-             "clearance": r["clearance"].nanmedian().item()}
+             "clearance": r["clearance"].nanmedian().item(),
+             # spread across the cell's robots (decorrelation check: identical starts give ~0 spread)
+             "mean_v_std": r["mean_v_along_cmd"].std().item() if n > 1 else 0.0,
+             "robots": {"success": r["success"].tolist(), "fell": r["fell"].tolist(),
+                        "mean_v": [round(v, 4) for v in r["mean_v_along_cmd"].tolist()]}}
         )
     return per_cell
 
