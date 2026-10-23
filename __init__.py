@@ -35,5 +35,15 @@ gym.register(
     },
 )
 
+gym.register(
+    id="Hexapod-Rough-RMATeacher-v0",
+    entry_point=f"{__name__}.hexapod_env:HexapodEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.hexapod_env_cfg:HexapodRoughEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:HexapodRoughRMATeacherPPORunnerCfg",
+    },
+)
+
 def register():
     pass

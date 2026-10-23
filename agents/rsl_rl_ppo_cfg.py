@@ -77,3 +77,39 @@ class HexapodRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+
+@configclass
+class RMATeacherModelCfg(RslRlMLPModelCfg):
+    """hexapod.rma.RMATeacherModel: MLP on [policy obs, z], z = mu(privileged e) (decisions.md P6/P7)."""
+
+    class_name: str = "hexapod.rma:RMATeacherModel"
+    priv_group: str = "privileged"
+    z_dim: int = 8
+    """CITED: RMA (arXiv 2107.04034) Sec. III-A, z in R^8 (verified 2026-10-23; A1 quadruped, e is 17-dim there)."""
+    encoder_hidden_dims: list[int] = [256, 128]
+    """CITED: RMA Sec. IV-B, mu is a 3-layer MLP with hidden sizes (256, 128). Our e is only 3-dim, so this is
+    larger than needed; kept to follow the reference (verified 2026-10-23)."""
+    priv_center: list[float] = [0.0, 0.875, 1.0]
+    priv_half_range: list[float] = [0.75, 0.375, 0.2]
+    """ASSUMED: fixed scaling of e to about [-1, 1] over the D1-D3 training ranges (see hexapod/rma.py)."""
+
+
+@configclass
+class HexapodRoughRMATeacherPPORunnerCfg(HexapodRoughPPORunnerCfg):
+    """Stage 2 (P7): same PPO recipe as stage 1, actor and critic see z = mu(e). Warm start from a padded stage-1
+    checkpoint (tools/rma_init.py), so --resume continues the iteration counter."""
+
+    max_iterations = 2000
+    obs_groups = {"actor": ["policy", "privileged"], "critic": ["policy", "privileged"]}
+    actor = RMATeacherModelCfg(
+        hidden_dims=[128, 128, 128],
+        activation="elu",
+        obs_normalization=False,
+        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
+    )
+    critic = RMATeacherModelCfg(
+        hidden_dims=[128, 128, 128],
+        activation="elu",
+        obs_normalization=False,
+    )

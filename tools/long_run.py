@@ -81,19 +81,11 @@ dev = env.device
 N = env.num_envs
 print("[long_run] env settings:", applied)
 
-ck = torch.load(args.checkpoint, map_location=dev, weights_only=False)
-sd = ck["actor_state_dict"] if "actor_state_dict" in ck else ck
-layers = sorted({int(k.split(".")[1]) for k in sd if k.startswith("mlp.")})
-mods = []
-for i, li in enumerate(layers):
-    w = sd[f"mlp.{li}.weight"]
-    lin = nn.Linear(w.shape[1], w.shape[0])
-    lin.weight.data.copy_(w)
-    lin.bias.data.copy_(sd[f"mlp.{li}.bias"])
-    mods.append(lin)
-    if i < len(layers) - 1:
-        mods.append(nn.ELU())
-actor = nn.Sequential(*mods).to(dev).eval()
+from hexapod.rma import load_policy  # noqa: E402
+
+# plain stage-1 actor (obs["policy"]) or RMA teacher (also obs["privileged"] through its encoder)
+actor = load_policy(args.checkpoint, dev)
+print(f"[long_run] policy: {'RMA teacher' if actor.is_teacher else 'plain MLP'}")
 
 ids = torch.arange(N, device=dev)
 if env._has_terrain_levels:
@@ -101,9 +93,9 @@ if env._has_terrain_levels:
     levels = torch.tensor(args.levels, device=dev)[ids % len(args.levels)]
     types = (ids // len(args.levels)) % n_cols
     env.set_terrain_cells(ids, levels, types)
-obs = env.reset()[0]["policy"]
+obs = env.reset()[0]
 env._commands[:, 0], env._commands[:, 1], env._commands[:, 2] = 0.0, -args.cmd, 0.0
-obs = env._get_observations()["policy"]
+obs = env._get_observations()
 
 steps_per_window = int(args.window * 60.0 / env.step_dt)
 n_windows = int(args.minutes / args.window + 1e-6)
@@ -119,11 +111,11 @@ for w in range(n_windows):
             # back to the cell origin (teleport, standing pose); a fall is only a body contact, never this
             env._reset_idx(ids.to(torch.int32))
             env._commands[:, 0], env._commands[:, 1], env._commands[:, 2] = 0.0, -args.cmd, 0.0
-            obs = env._get_observations()["policy"]
+            obs = env._get_observations()
         with torch.no_grad():
             act = actor(obs)
         obs_d, rew, terminated, truncated, _ = env.step(act)
-        obs = obs_d["policy"]
+        obs = obs_d
         falls += int(terminated.sum().item())
         v = -env._robot.data.root_lin_vel_b.torch[:, 1]
         rew_sum += rew.mean().item()

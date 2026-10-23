@@ -188,22 +188,10 @@ def swing_clearance(toe_log: torch.Tensor, done_step: torch.Tensor, window_steps
 
 
 def load_actor(path: str) -> nn.Module:
-    ck = torch.load(path, map_location=dev, weights_only=False)
-    sd = ck["actor_state_dict"] if "actor_state_dict" in ck else ck
-    layers = sorted({int(k.split(".")[1]) for k in sd if k.startswith("mlp.")})
-    mods = []
-    for i, li in enumerate(layers):
-        w = sd[f"mlp.{li}.weight"]
-        lin = nn.Linear(w.shape[1], w.shape[0])
-        lin.weight.data.copy_(w)
-        lin.bias.data.copy_(sd[f"mlp.{li}.bias"])
-        mods.append(lin)
-        if i < len(layers) - 1:
-            mods.append(nn.ELU())
-    for k in sd:
-        if "normalizer" in k:
-            raise RuntimeError(f"checkpoint has an observation normalizer ({k}); the suite does not apply it")
-    return nn.Sequential(*mods).to(dev).eval()
+    # plain stage-1 actor (obs["policy"]) or RMA teacher (also obs["privileged"] through its encoder)
+    from hexapod.rma import load_policy
+
+    return load_policy(path, dev)
 
 
 def run_batch(actor, batch_jobs):
@@ -223,7 +211,7 @@ def run_batch(actor, batch_jobs):
     env._commands[ids, 1] = -torch.tensor([c["cmd"] for c in cell_rows], device=dev)  # forward = -y
     env._gait_phase[:] = 0.0
     env.episode_length_buf[:] = 0
-    obs = env._get_observations()["policy"]
+    obs = env._get_observations()
     done = torch.zeros(num_envs, dtype=torch.bool, device=dev)
     out = {k: torch.zeros(num_envs, device=dev) for k in ("success", "fell", "speed_err", "mean_v_along_cmd", "length_s")}
     steps = int(args.episode_s / env.step_dt) + 2
@@ -234,7 +222,7 @@ def run_batch(actor, batch_jobs):
         with torch.no_grad():
             act = actor(obs)
         obs_d, _, terminated, truncated, _ = env.step(act)
-        obs = obs_d["policy"]
+        obs = obs_d
         finished = (terminated | truncated) & ~done
         if finished.any():
             for k in out:
