@@ -8,7 +8,7 @@
 Cells = (terrain level x terrain type) x (DR grid) x (command speed bucket), N robots per cell.
   * terrain: levels 0-9 x every sub-terrain column type of the rough env; on the flat env a single cell "flat".
   * DR grid: friction {0.5, 0.875, 1.25} x added mass {-0.75, 0, +0.75} kg x motor strength {0.8, 1.0, 1.2}
-    (27 cells), or nominal only (1 cell) with --nominal_only.
+    (27 cells), or nominal only (1 cell) with --nominal_only, or explicit cells with --dr_cells mu,dm,s ...
   * command speeds: --cmds (default: the env's command range in 0.05 m/s buckets), forward along -y, no yaw.
 Per cell: success (P3: time-out without a fall AND |mean speed along cmd - cmd| < 25% cmd), mean speed error,
 mean speed, falls. The per-episode outcome is computed by the env itself (HexapodEnv.episode_stats), so the suite
@@ -45,6 +45,12 @@ parser.add_argument("--every", type=int, default=1, help="with --run_dir: keep e
 parser.add_argument("--num_envs", type=int, default=512, help="envs per batch")
 parser.add_argument("--robots_per_cell", type=int, default=16)
 parser.add_argument("--nominal_only", action="store_true", help="DR grid = nominal only")
+parser.add_argument(
+    "--dr_cells",
+    nargs="+",
+    default=None,
+    help="explicit DR cells 'mu,dmass_kg,strength' (e.g. out-of-range tests: 0.175,0,1 1,2.5,1 1,0,0.6); overrides the grid",
+)
 parser.add_argument("--levels", type=int, nargs="+", default=list(range(10)))
 parser.add_argument("--cmds", type=float, nargs="+", default=None, help="command speeds [m/s]; default = env range in 0.05 buckets")
 parser.add_argument("--episode_s", type=float, default=20.0)
@@ -145,7 +151,13 @@ if env._has_terrain_levels:
         terrain_cells = [(lvl, name, [max(cols)]) for lvl in args.levels for name, cols in seen.items() if args.types is None or name in args.types]
 else:
     terrain_cells = [(0, "flat", [0])]
-dr_cells = [(float(env_cfg.sim.physics_material.static_friction), 0.0, 1.0)] if args.nominal_only else list(itertools.product(FRICTIONS, MASSES, STRENGTHS))
+if args.dr_cells:
+    dr_cells = [tuple(float(v) for v in c.split(",")) for c in args.dr_cells]
+    assert all(len(c) == 3 for c in dr_cells), "--dr_cells entries are mu,dmass_kg,strength"
+elif args.nominal_only:
+    dr_cells = [(float(env_cfg.sim.physics_material.static_friction), 0.0, 1.0)]
+else:
+    dr_cells = list(itertools.product(FRICTIONS, MASSES, STRENGTHS))
 cells = [
     {"level": lvl, "type": name, "cols": cols, "friction": f, "dmass": m, "strength": s, "cmd": c}
     for (lvl, name, cols) in terrain_cells
