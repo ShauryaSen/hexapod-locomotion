@@ -18,7 +18,7 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from hexapod.deploy import cfg as C  # noqa: E402
-from hexapod.deploy.arms import ARM_NAMES, make_arm  # noqa: E402
+from hexapod.deploy.arms import ARM_NAMES, make_arm, make_composite  # noqa: E402
 from hexapod.deploy.batched import build_from_checkpoint  # noqa: E402
 from hexapod.deploy.detectors import Baseliner, calibrate_cusum_h, three_sigma_fa_rate  # noqa: E402
 from hexapod.deploy.ensemble import DynamicsEnsemble, train_ensemble  # noqa: E402
@@ -119,6 +119,23 @@ for name in ARM_NAMES:
         if out["alarm"][0]:
             alarms.append(round(t))
     print(f"[4] arm {name:14s}: adapt cycles {sum(adapt_hist)}/900, alarms at t[s] {alarms[:6]}")
+
+# ---- 4a. composite arm == the same arms run alone on their subsets
+specs = [("never", C.ArmCfg(name="never")), ("scheduled", C.ArmCfg(name="scheduled", period_min=2.0)), ("three_sigma", C.ArmCfg(name="three_sigma")), ("oracle", C.ArmCfg(name="oracle"))]
+nA = 8
+sch8 = [generate_schedule(0, scfg)] * nA
+comp = make_composite(specs, nA, u2, det, dev, cycle_s, sch8)
+alone = [make_arm(nm, 2, ac, u2, det, dev, cycle_s, sch8[:2]) for nm, ac in specs]
+gen = torch.Generator(device="cpu").manual_seed(0)
+for c in range(900):
+    t = (c + 1) * cycle_s
+    zfull = (4.0 if 300 <= c < 450 else 0.0) + 0.3 * torch.randn(nA, generator=gen)
+    zfull = zfull.to(dev)
+    o = comp.cycle(t, zfull)
+    for k, a in enumerate(alone):
+        oa = a.cycle(t, zfull[torch.arange(k, nA, len(specs), device=dev)])
+        assert torch.equal(o["adapt"][k::len(specs)], oa["adapt"]) and torch.equal(o["alarm"][k::len(specs)], oa["alarm"]), (k, c)
+print(f"[4a] composite arm of {comp.labels} matches the arms run alone over 900 cycles")
 
 # ---- 4b. R5 baseliner: per-deployment mean removed, NaN while collecting
 bl = Baseliner(2, 10, 1.0, 0.0, dev)

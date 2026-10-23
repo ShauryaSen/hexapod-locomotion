@@ -170,8 +170,9 @@ class DeploymentRunner:
         s.set("baseline_mu", self.baseliner.mu if self.baseliner is not None else nanv)
         s.commit()
         state = self.arm.cycle(t_end, z)
-        if self.baseliner is not None and getattr(self.arm, "rebaseline_on_stop", False) and bool(state["stopped"].any()):
-            self.baseliner.restart(state["stopped"])  # R5: re-measure the nominal level after every episode
+        rebase = state.get("rebaseline", state["stopped"] if getattr(self.arm, "rebaseline_on_stop", False) else None)
+        if self.baseliner is not None and rebase is not None and bool(rebase.any()):
+            self.baseliner.restart(rebase)  # R5: re-measure the nominal level after every detector-arm episode
         new_adapt = state["adapt"]
         ended = adapt & ~new_adapt
         if bool(ended.any()):

@@ -26,6 +26,7 @@ parser.add_argument("--task", default="Hexapod-Rough-Direct-v0")
 parser.add_argument("--num_envs", type=int, default=16)
 parser.add_argument("--minutes", type=float, default=None, help="robot-time per deployment (default: the schedule length, or 2 with --no_schedule)")
 parser.add_argument("--arm", default="never")
+parser.add_argument("--arms", nargs="*", default=None, help="several arms in one process: name or name:key=val,key=val (period_min, hold_min, budget_min, cusum_h, three_sigma_consecutive); deployment i runs arm i %% len(arms) and schedule seed schedule_seeds[(i // len(arms)) %% len(seeds)], so every arm sees the same schedules and terrain pattern")
 parser.add_argument("--period_min", type=float, default=10.0)
 parser.add_argument("--hold_min", type=float, default=10.0)
 parser.add_argument("--budget_min", type=float, default=None, help="adaptation budget per episode [robot-min] (default UpdaterCfg.budget_min)")
@@ -55,7 +56,7 @@ import torch  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from hexapod.deploy import cfg as C  # noqa: E402
-from hexapod.deploy.arms import arm_label, make_arm  # noqa: E402
+from hexapod.deploy.arms import arm_label, make_arm, make_composite  # noqa: E402
 from hexapod.deploy.batched import build_from_checkpoint, build_preproc  # noqa: E402
 from hexapod.deploy.ensemble import DynamicsEnsemble  # noqa: E402
 from hexapod.deploy.envutil import make_env  # noqa: E402
@@ -96,11 +97,24 @@ dev = env.device
 N = env.num_envs
 print("[deploy] env settings:", applied, "N", N, "step_dt", env.step_dt)
 
+A = len(args.arms) if args.arms else 1
+replicate_of_env = [i // A for i in range(N)]
+if A > 1 and env._has_terrain_levels:
+    # every arm's replicate r gets the same terrain cell (and schedule) as the other arms' replicate r
+    rep = torch.tensor(replicate_of_env, device=dev)
+    n_cols = env._terrain.terrain_origins.shape[1]
+    lv = torch.tensor(list(dcfg.levels), device=dev)[rep % len(dcfg.levels)]
+    ty = (rep // len(dcfg.levels)) % n_cols
+    env.set_terrain_cells(torch.arange(N, device=dev), lv, ty)
+    env.reset()
+    from hexapod.deploy.envutil import pin_commands
+
+    pin_commands(env, dcfg.cmd_speed)
 schedules = [None] * N
 if not args.no_schedule:
     seeds = args.schedule_seeds
     uniq = {s: generate_schedule(s, scfg) for s in seeds}
-    schedules = [uniq[seeds[i % len(seeds)]] for i in range(N)]
+    schedules = [uniq[seeds[(i // A) % len(seeds)]] for i in range(N)]
     for s in uniq.values():
         s.save(os.path.join(out_dir, f"schedule_seed{s.seed}.json"))
     print("[deploy] schedules:", {s: [(round(e.t_s), e.factor, e.on) for e in sch.events] for s, sch in uniq.items()})
@@ -110,12 +124,25 @@ actor, critic, info = build_from_checkpoint(args.checkpoint, N, dev)
 preproc = build_preproc(info, N, env.single_observation_space["policy"].shape[-1], dev)  # R1: RMA student or None
 updater = KLAnchoredPPO(actor, critic, info["actor"], ucfg, dev, info["obs_dim"])
 ensemble = DynamicsEnsemble.load(args.ensemble, dev) if args.ensemble else None
-arm = make_arm(args.arm, N, acfg, ucfg, detcfg, dev, dcfg.gait_cycle_s, schedules)
+if args.arms:
+    specs = []
+    for spec in args.arms:
+        name, _, kv = spec.partition(":")
+        kw = {k: float(v) if k != "three_sigma_consecutive" else int(v) for k, v in (x.split("=") for x in kv.split(",") if x)}
+        specs.append((name, C.ArmCfg(name=name, **{"period_min": args.period_min, "hold_min": args.hold_min, "budget_min": args.budget_min, **kw})))
+    arm = make_composite(specs, N, ucfg, detcfg, dev, dcfg.gait_cycle_s, schedules)
+    arm_of_env = [specs[i % A][0] for i in range(N)]
+    label_of_env = [arm.labels[i % A] for i in range(N)]
+    args.arm = "multi"
+else:
+    arm = make_arm(args.arm, N, acfg, ucfg, detcfg, dev, dcfg.gait_cycle_s, schedules)
+    arm_of_env = [args.arm] * N
+    label_of_env = [arm_label(acfg, detcfg)] * N
 applier = ScheduleApplier(env, schedules, scfg)
 runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"], preproc=preproc)
 
 meta = {
-    "checkpoint": args.checkpoint, "task": args.task, "num_envs": N, "arm": args.arm, "arm_label": arm_label(acfg, detcfg), "tag": args.tag, "minutes": minutes,
+    "checkpoint": args.checkpoint, "task": args.task, "num_envs": N, "arm": args.arm, "arm_label": arm_label(acfg, detcfg) if not args.arms else "multi", "arm_of_env": arm_of_env, "arm_label_of_env": label_of_env, "replicate_of_env": replicate_of_env, "arms_spec": args.arms, "tag": args.tag, "minutes": minutes,
     "rma_student": info.get("rma_student") is not None, "schedule_split": [None if s is None else ("tune" if s.seed in scfg.tune_seeds else "test" if s.seed in scfg.test_seeds else "other") for s in schedules],
     "schedule_seeds": None if args.no_schedule else args.schedule_seeds, "env_schedule_seed": [None if s is None else s.seed for s in schedules],
     "ensemble": args.ensemble, "cusum_h": args.cusum_h, "env_applied": applied, "step_dt": env.step_dt,

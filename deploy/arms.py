@@ -70,7 +70,8 @@ class Arm:
         if self.converge is not None:
             self.converge.reset(start)
         reset = self.reset_policy(t_s)
-        return {"adapt": self.adapting.clone(), "alarm": start.clone(), "new": new, "restart": restart, "stopped": stop, "reset": reset}
+        rebaseline = stop & self.rebaseline_on_stop
+        return {"adapt": self.adapting.clone(), "alarm": start.clone(), "new": new, "restart": restart, "stopped": stop, "reset": reset, "rebaseline": rebaseline}
 
 
 class Never(Arm):
@@ -204,6 +205,40 @@ class Oracle(Arm):
                 fired = True
             start[i] = fired
         return start
+
+
+class CompositeArm:
+    """Several arms in one process: arm k drives deployments ``idx[k]`` (disjoint, covering 0..n-1). Each sub-arm is
+    built with its own n_k and the schedules of its deployments, so its behaviour is identical to running it alone.
+    The runner sees one arm with per-deployment outputs."""
+
+    def __init__(self, n: int, arms: list, idx: list[torch.Tensor], labels: list[str], device):
+        self.n, self.arms, self.idx, self.labels, self.device = n, arms, idx, labels, device
+        self.det_cfg = arms[0].det_cfg
+        self.budget_used = torch.zeros(n, device=device)
+        self.rebaseline_on_stop = True  # per-deployment flag comes in the "rebaseline" output
+
+    def cycle(self, t_s: float, z: torch.Tensor) -> dict[str, torch.Tensor]:
+        out = {k: torch.zeros(self.n, dtype=torch.bool, device=self.device) for k in ("adapt", "alarm", "new", "restart", "stopped", "reset", "rebaseline")}
+        for arm, ix in zip(self.arms, self.idx):
+            o = arm.cycle(t_s, z[ix])
+            for k in out:
+                out[k][ix] = o[k]
+            self.budget_used[ix] = arm.budget_used
+        return out
+
+
+def make_composite(specs: list[tuple[str, ArmCfg]], n: int, upd_cfg: UpdaterCfg, det_cfg: DetectorCfg, device, cycle_s: float, schedules=None) -> CompositeArm:
+    """Deployment i runs arm ``specs[i % len(specs)]`` (interleaved, so each arm sees every terrain cell pattern)."""
+    A = len(specs)
+    arms, idx, labels = [], [], []
+    for k, (name, acfg) in enumerate(specs):
+        ix = torch.arange(k, n, A, device=device)
+        sch = None if schedules is None else [schedules[int(i)] for i in ix.tolist()]
+        arms.append(make_arm(name, len(ix), acfg, upd_cfg, det_cfg, device, cycle_s, sch))
+        idx.append(ix)
+        labels.append(arm_label(acfg, det_cfg))
+    return CompositeArm(n, arms, idx, labels, device)
 
 
 def arm_label(cfg: ArmCfg, det_cfg: DetectorCfg) -> str:

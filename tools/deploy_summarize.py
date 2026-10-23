@@ -52,6 +52,8 @@ for meta_path in sorted(glob.glob(os.path.join(args.root, "**", "meta.json"), re
     if "arm" not in meta or "env_schedule_seed" not in meta:
         continue
     budget = (meta.get("arm_cfg") or {}).get("budget_min") or (meta.get("updater_cfg") or {}).get("budget_min") or 1.0
+    if budget == float("inf") or (isinstance(budget, str)):
+        budget = (meta.get("updater_cfg") or {}).get("budget_min") or 1.0
     scheds = {}
     for i, seed in enumerate(meta["env_schedule_seed"]):
         if seed is None:
@@ -66,20 +68,24 @@ for meta_path in sorted(glob.glob(os.path.join(args.root, "**", "meta.json"), re
         split = (meta.get("schedule_split") or [None] * len(meta["env_schedule_seed"]))[i]
         if split is None and seed is not None:
             split = "tune" if seed in scfg.tune_seeds else "test" if seed in scfg.test_seeds else "other"
-        lab = meta.get("arm_label") or meta["arm"]
+        arm_i = (meta.get("arm_of_env") or [meta["arm"]] * len(meta["env_schedule_seed"]))[i]
+        lab = (meta.get("arm_label_of_env") or [meta.get("arm_label") or meta["arm"]] * len(meta["env_schedule_seed"]))[i]
         tag = meta.get("tag")
         if tag is None:  # runs written before the tag was stored: <stamp>_<arm>_<tag>
             base = os.path.basename(run_dir.rstrip("/"))
             tag = base.split(f"_{meta['arm']}_", 1)[1] if f"_{meta['arm']}_" in base else ""
         if args.label_by_tag and tag:
             lab = f"{lab}[{tag}]"
-        m.update({"arm": meta["arm"], "arm_label": lab, "checkpoint": os.path.basename(os.path.dirname(meta["checkpoint"])) + "/" + os.path.basename(meta["checkpoint"]), "schedule_seed": seed, "split": split or "none", "env": i, "env_seed": (meta.get("deploy_cfg") or {}).get("env_seed", 0), "period_min": (meta.get("arm_cfg") or {}).get("period_min"), "run_dir": run_dir})
+        rep_i = (meta.get("replicate_of_env") or list(range(len(meta["env_schedule_seed"]))))[i]
+        m.update({"arm": arm_i, "arm_label": lab, "replicate": rep_i, "checkpoint": os.path.basename(os.path.dirname(meta["checkpoint"])) + "/" + os.path.basename(meta["checkpoint"]), "schedule_seed": seed, "split": split or "none", "env": i, "env_seed": (meta.get("deploy_cfg") or {}).get("env_seed", 0), "period_min": (meta.get("arm_cfg") or {}).get("period_min"), "run_dir": run_dir})
         rows.append(m)
 print(f"[summarize] {len(rows)} deployments from {len({r['run_dir'] for r in rows})} runs")
 
 
 def key(r):
-    return (r["checkpoint"], r["schedule_seed"], r["env_seed"], r["env"])
+    """Pairing key across arms: same pi_0, schedule, updater seed and replicate (= terrain cell); in single-arm runs the
+    replicate is the env index, in multi-arm runs env // number of arms."""
+    return (r["checkpoint"], r["schedule_seed"], r["env_seed"], r["replicate"])
 
 
 never = {key(r): r for r in rows if r["arm"] == "never"}
@@ -151,7 +157,7 @@ if "always" in selected and "never" in selected:
 # R7: updater seeds per (pi_0, deployment)
 seed_counts = {}
 for r in rows:
-    seed_counts.setdefault((r["arm_label"], r["checkpoint"], r["schedule_seed"], r["env"]), set()).add(r["env_seed"])
+    seed_counts.setdefault((r["arm_label"], r["checkpoint"], r["schedule_seed"], r["replicate"]), set()).add(r["env_seed"])
 n_upd_seeds = sorted({len(v) for v in seed_counts.values()}) if seed_counts else []
 
 cols = [("progress_m", "progress [m]"), ("reward_sum", "summed reward"), ("falls_per_h", "falls/h"), ("track_err", "tracking err [m/s]"), ("false_alarms_per_h", "false alarms/h"), ("detection_delay_s", "detection delay [s]"), ("missed", "missed changes"), ("quiet_vs_never_per_h", "quiet progress vs never [m/h]"), ("recurrence_gain_m", "recurrence gain [m]"), ("adapt_min", "adapt time [min]")]
