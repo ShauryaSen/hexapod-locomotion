@@ -76,13 +76,23 @@ def make_env(cfg: DeployCfg, checkpoint: str, num_envs: int, device: str, run_di
     env = gym.make(cfg.task, cfg=env_cfg).unwrapped
     ids = torch.arange(env.num_envs, device=env.device)
     if env._has_terrain_levels:
-        n_cols = env._terrain.terrain_origins.shape[1]
-        levels = torch.tensor(list(cfg.levels), device=env.device)[ids % len(cfg.levels)]
-        types = (ids // len(cfg.levels)) % n_cols
+        levels, types = terrain_cells(env, ids, cfg.levels)
         env.set_terrain_cells(ids, levels, types)
     env.reset()
     pin_commands(env, cfg.cmd_speed)
     return env, applied
+
+
+def terrain_cells(env, k, levels):
+    """Deployment index k -> (level, column): column = k mod n_cols, level = levels[k mod len(levels)], so the first
+    n_cols deployments cover every column (every terrain type) and the levels cycle. Fixed 2026-10-23: the earlier
+    rule (column = (k // len(levels)) mod n_cols) put 16 deployments on columns 0-2 only (random rough, slope) and
+    12 sweep replicates on columns 0-1 (random rough only)."""
+    import torch
+
+    n_cols = env._terrain.terrain_origins.shape[1]
+    lv = torch.tensor(list(levels), device=env.device)[k % len(levels)]
+    return lv, k % n_cols
 
 
 def pin_commands(env, cmd_speed: float, env_ids=None):

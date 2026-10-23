@@ -103,9 +103,9 @@ replicate_of_env = [i // A for i in range(N)]
 if A > 1 and env._has_terrain_levels:
     # every arm's replicate r gets the same terrain cell (and schedule) as the other arms' replicate r
     rep = torch.tensor(replicate_of_env, device=dev)
-    n_cols = env._terrain.terrain_origins.shape[1]
-    lv = torch.tensor(list(dcfg.levels), device=dev)[rep % len(dcfg.levels)]
-    ty = (rep // len(dcfg.levels)) % n_cols
+    from hexapod.deploy.envutil import terrain_cells
+
+    lv, ty = terrain_cells(env, rep, dcfg.levels)
     env.set_terrain_cells(torch.arange(N, device=dev), lv, ty)
     env.reset()
     from hexapod.deploy.envutil import pin_commands
