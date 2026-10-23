@@ -86,8 +86,20 @@ dev = env.device
 actor, critic, info = build_from_checkpoint(args.checkpoint, N, dev)
 preproc = build_preproc(info, N, env.single_observation_space["policy"].shape[-1], dev)
 updater = KLAnchoredPPO(actor, critic, info["actor"], ucfg, dev, info["obs_dim"])
-# group i = deployments [i*R, (i+1)*R); interleaving would spread groups over terrain cells more evenly, so do that
+# deployment i: group i % G, replicate i // G; every replicate's G members share one terrain cell, so groups are
+# compared on identical terrain (2026-10-23: with G = 6 and 6 levels, cells assigned by env index put each group on
+# a single level and confounded the groups with terrain in sweep 2)
 gid = torch.arange(N, device=dev) % G
+rep = torch.arange(N, device=dev) // G
+if env._has_terrain_levels:
+    n_cols = env._terrain.terrain_origins.shape[1]
+    lv = torch.tensor(list(dcfg.levels), device=dev)[rep % len(dcfg.levels)]
+    ty = (rep // len(dcfg.levels)) % n_cols
+    env.set_terrain_cells(torch.arange(N, device=dev), lv, ty)
+    env.reset()
+    from hexapod.deploy.envutil import pin_commands
+
+    pin_commands(env, dcfg.cmd_speed)
 for i, g in enumerate(groups):
     m = gid == i
     updater.opt.lr[m] = g["lr"]
@@ -104,7 +116,7 @@ schedules = [sched] * N
 arm = make_arm("oracle", N, C.ArmCfg(name="oracle", budget_min=args.budget_min), ucfg, detcfg, dev, dcfg.gait_cycle_s, schedules)
 applier = ScheduleApplier(env, schedules, scfg)
 runner = DeploymentRunner(env, dcfg, updater, arm, applier, None, pi0_critic=info["critic"], preproc=preproc)
-meta = {"checkpoint": args.checkpoint, "factor": args.factor, "value": args.value, "groups": groups, "per_group": R, "group_of_env": gid.tolist(), "t_on": args.t_on, "budget_min": args.budget_min, "minutes": args.minutes, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg), "env_applied": applied,
+meta = {"checkpoint": args.checkpoint, "factor": args.factor, "value": args.value, "groups": groups, "per_group": R, "group_of_env": gid.tolist(), "replicate_of_env": rep.tolist(), "t_on": args.t_on, "budget_min": args.budget_min, "minutes": args.minutes, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg), "env_applied": applied,
         "levels_per_env": env._terrain.terrain_levels.tolist() if env._has_terrain_levels else None, "types_per_env": env._terrain.terrain_types.tolist() if env._has_terrain_levels else None}
 json.dump(meta, open(os.path.join(out_dir, "meta.json"), "w"), indent=1, default=str)
 summary = runner.run(args.minutes)
@@ -133,14 +145,28 @@ for i, g in enumerate(groups):
     row["kl_pi0_end"] = float(np.nanmean(kl_end)) if np.any(~np.isnan(kl_end)) else None
     rows.append(row)
 ctrl = next((r for r in rows if r["lr"] == 0 and not r["explore"]), None)
+# paired differences vs control per replicate (same terrain cell), hold phase
+if ctrl is not None:
+    rep_np = np.array(meta["replicate_of_env"])
+    ci_ctrl = groups.index(next(g for g in groups if g["name"] == ctrl["group"]))
+    for i, r in enumerate(rows):
+        sel, csel = gid_np == i, gid_np == ci_ctrl
+        a = np.array(r["rate_hold"]["per_robot"])
+        c = np.array(ctrl["rate_hold"]["per_robot"])
+        ra, rc = rep_np[sel], rep_np[csel]
+        common = sorted(set(ra) & set(rc))
+        d = np.array([a[list(ra).index(k)] - c[list(rc).index(k)] for k in common])
+        lo, hi = bootstrap_ci(d, 2000, 0.95)
+        r["paired_hold_vs_control"] = {"mean": float(d.mean()), "ci": [lo, hi], "n": len(d)}
 md = [f"# Updater sweep: {args.factor} = {args.value} at {args.t_on:.0f} s, {R} robots per group, adapt {args.budget_min:g} min then hold (deterministic) to {args.minutes:g} min", "",
       "groups: " + "; ".join(f"{g['name']} = lr {g['lr']:g}, KL {g['kl_weight']:g}, explore {int(g['explore'])}, std x{g['std_scale']:g}, batch {g['batch_steps'] or ucfg.steps_per_batch}" for g in groups), "",
       f"checkpoint `{os.path.basename(os.path.dirname(args.checkpoint))}/{os.path.basename(args.checkpoint)}`; {ucfg.steps_per_batch} steps/batch, {ucfg.num_learning_epochs} epochs, entropy {ucfg.entropy_coef}; progress capped at the command (R4). Rates in m/min per robot, mean [95% bootstrap CI over robots].", "",
-      "| group | lr | KL weight | explore | before change | adapting | hold (adapted weights, no noise) | hold - control hold | falls before / adapting / hold | updates per robot | KL to pi_0 at end |",
+      "| group | lr | KL weight | explore | before change | adapting | hold (adapted weights, no noise) | hold - control, paired per replicate [95% CI] | falls before / adapting / hold | updates per robot | KL to pi_0 at end |",
       "|---|---|---|---|---|---|---|---|---|---|---|"]
 for r in rows:
     f = lambda k: f"{r[k]['mean']:.2f} [{r[k]['ci'][0]:.2f}, {r[k]['ci'][1]:.2f}]"
-    d = f"{r['rate_hold']['mean'] - ctrl['rate_hold']['mean']:+.2f}" if ctrl else "–"
+    pd = r.get("paired_hold_vs_control")
+    d = f"{pd['mean']:+.2f} [{pd['ci'][0]:+.2f}, {pd['ci'][1]:+.2f}]" if pd else "–"
     md.append(f"| {r['group']} | {r['lr']:g} | {r['kl_weight']:g} | {int(r['explore'])} | {f('rate_before')} | {f('rate_adapting')} | {f('rate_hold')} | {d} | {r['falls_before']:.0f} / {r['falls_adapting']:.0f} / {r['falls_hold']:.0f} | {r['updates']:.0f} | {r['kl_pi0_end'] if r['kl_pi0_end'] is None else round(r['kl_pi0_end'], 4)} |")
 open(os.path.join(out_dir, "sweep.md"), "w").write("\n".join(md) + "\n")
 json.dump(rows, open(os.path.join(out_dir, "sweep.json"), "w"), indent=1)
