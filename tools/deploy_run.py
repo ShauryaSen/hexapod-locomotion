@@ -89,7 +89,7 @@ if args.baseline_cycles is not None:
     detcfg.baseline_cycles = args.baseline_cycles
 
 stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-out_dir = os.path.join(args.out_root, f"{stamp}_{args.arm}" + (f"_{args.tag}" if args.tag else ""))
+out_dir = os.path.join(args.out_root, f"{stamp}_{'multi' if args.arms else args.arm}" + (f"_{args.tag}" if args.tag else ""))
 os.makedirs(out_dir, exist_ok=True)
 
 env, applied = make_env(dcfg, args.checkpoint, args.num_envs, args.device, args.run_dir)

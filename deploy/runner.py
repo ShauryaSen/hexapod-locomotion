@@ -86,7 +86,10 @@ class DeploymentRunner:
             acc["track"] += torch.where(walking, (v - cfg.cmd_speed).abs(), zeros)
             acc["track_n"] += walking.float()
             acc["rew"] += rew
-            acc["falls"] += fell.float()
+            # R4: a fall costs one fixed stand-up time. A robot that collapses again while it is held in the default pose
+            # (seen with motor strength 0.5: the env resets it every step) is not a new fall and does not restart the hold.
+            new_fall = fell & ~recovering
+            acc["falls"] += new_fall.float()
             acc["recov"] += recovering.float()
             if self.ensemble is not None:
                 nmse, dis = self.ensemble.residual_step(obs, act, obs_next)
@@ -97,7 +100,7 @@ class DeploymentRunner:
             upd.store(store_mask, pobs, act, logp, value, rew, fell, mean, std)
             if bool(fell.any()):
                 # env.step already reset the fallen robots at their cells (random command): pin and re-observe
-                recover_left = torch.where(fell, torch.full_like(recover_left, self.recovery_steps), recover_left)
+                recover_left = torch.where(new_fall, torch.full_like(recover_left, self.recovery_steps), recover_left)
                 pin_commands(env, cfg.cmd_speed)
                 obs_next = policy_obs(env)
             if self.repo_steps and (step + 1) % self.repo_steps == 0:
