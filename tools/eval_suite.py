@@ -31,6 +31,7 @@ import argparse
 import glob
 import itertools
 import json
+import math
 import os
 import re
 
@@ -54,6 +55,17 @@ parser.add_argument(
 parser.add_argument("--levels", type=int, nargs="+", default=list(range(10)))
 parser.add_argument("--cmds", type=float, nargs="+", default=None, help="command speeds [m/s]; default = env range in 0.05 buckets")
 parser.add_argument("--episode_s", type=float, default=20.0)
+parser.add_argument(
+    "--start_jitter",
+    type=float,
+    nargs=2,
+    default=None,
+    metavar=("XY_M", "YAW_DEG"),
+    help="per-robot start perturbation: uniform +-XY_M position, +-YAW_DEG yaw, and a uniform random gait phase."
+    " Default off: every robot of a cell starts identically, so its robots are near-copies (correlated outcomes)."
+    " Suggested 0.05 10 (0.05 m keeps the robot on the 0.8 m start platforms)",
+)
+parser.add_argument("--seed", type=int, default=0, help="torch seed for --start_jitter")
 parser.add_argument("--env_override", nargs="*", default=[], help="key=value env cfg overrides (applied after params)")
 parser.add_argument("--no_params", action="store_true", help="do not read <run>/params/env.yaml")
 parser.add_argument("--tag", default="", help="suffix for the output files")
@@ -65,6 +77,8 @@ app = AppLauncher(args).app
 
 import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
+
+torch.manual_seed(args.seed)
 import torch.nn as nn  # noqa: E402
 import yaml  # noqa: E402
 
@@ -206,6 +220,21 @@ def load_actor(path: str) -> nn.Module:
     return load_policy(path, dev)
 
 
+def _jitter_starts(n: int):
+    """Perturb the start of envs 0..n-1: xy offset, yaw rotation, random gait phase (see --start_jitter)."""
+    from isaaclab.utils.math import quat_from_euler_xyz, quat_mul
+
+    xy, yaw_deg = args.start_jitter
+    ids = torch.arange(n, device=dev)
+    pose = env._robot.data.root_pose_w.torch[:n].clone()
+    pose[:, 0:2] += (torch.rand(n, 2, device=dev) * 2 - 1) * xy
+    yaw = (torch.rand(n, device=dev) * 2 - 1) * math.radians(yaw_deg)
+    zero = torch.zeros_like(yaw)
+    pose[:, 3:7] = quat_mul(quat_from_euler_xyz(zero, zero, yaw), pose[:, 3:7])
+    env._robot.write_root_pose_to_sim_index(root_pose=pose, env_ids=ids.to(torch.int32))
+    env._gait_phase[:n] = torch.rand(n, device=dev) * 2 * math.pi
+
+
 def run_batch(actor, batch_jobs):
     n = len(batch_jobs)
     ids = torch.arange(n, device=dev)
@@ -222,6 +251,8 @@ def run_batch(actor, batch_jobs):
     env._commands[:] = 0.0
     env._commands[ids, 1] = -torch.tensor([c["cmd"] for c in cell_rows], device=dev)  # forward = -y
     env._gait_phase[:] = 0.0
+    if args.start_jitter is not None:
+        _jitter_starts(n)
     env.episode_length_buf[:] = 0
     obs = env._get_observations()
     done = torch.zeros(num_envs, dtype=torch.bool, device=dev)
