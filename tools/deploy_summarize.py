@@ -64,6 +64,8 @@ for meta_path in sorted(glob.glob(os.path.join(args.root, "**", "meta.json"), re
                 scheds[seed] = Schedule.load(os.path.join(run_dir, f"schedule_seed{seed}.json"))
             s = scheds[seed]
         m = deployment_metrics(arrays, i, s, mcfg, budget)
+        if m and s is not None:
+            m.update(s.overlap_stats())
         if not m:
             continue
         if ((meta.get("arm_of_env") or [meta["arm"]] * len(meta["env_schedule_seed"]))[i]) == "never":
@@ -187,6 +189,13 @@ if hyp:
         md.append(f"| {name} | {a} | {b} | " + (f"{d['n']} ({d['n_checkpoints']}) | {d['mean']:.2f} | [{d['ci'][0]:.2f}, {d['ci'][1]:.2f}] | {verdict} |" if d else "– | – | – | no paired test deployments |"))
 else:
     md.append("(no tune/test-tagged runs yet)")
+ov_rows = [r for r in rows if "overlap_count" in r]
+if ov_rows:
+    md += ["", "## Split by overlapping changes (schedules with >= 1 stretch of two factors on at once vs none; tag only)", "", "| arm | no overlap: n | progress [m] | with overlap: n | progress [m] |", "|---|---|---|---|---|"]
+    for g in names:
+        a = [r for r in groups[g] if r.get("overlap_count", 0) == 0]
+        b = [r for r in groups[g] if r.get("overlap_count", 0) > 0]
+        md.append(f"| {g} | {len(a)} | {fmt_ci([r['progress_m'] for r in a], args.bootstrap_n)} | {len(b)} | {fmt_ci([r['progress_m'] for r in b], args.bootstrap_n)} |")
 md += ["", "## Progress decomposition (quiet / post-change / recurrence; window = adaptation budget)", "", "| arm | " + " | ".join(c[1] for c in seg_cols) + " |", "|---|" + "---|" * len(seg_cols)]
 for g in names:
     rs = groups[g]

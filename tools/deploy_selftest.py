@@ -115,6 +115,7 @@ for seed in range(3):
     s = generate_schedule(seed, scfg)
     print(f"[3] schedule seed {seed}: length {s.length_s / 60:.1f} min, {len(s.events)} changes, nominal {s.nominal_fraction():.2f}, recurrence {s.has_recurrence()}, tries {s.cfg['tries']}: " + ", ".join(f"{e.t_s / 60:.1f}m {e.factor} {'on' if e.on else 'off'}" for e in s.events))
     assert scfg.n_changes_min <= len(s.events) <= scfg.n_changes_max and s.nominal_fraction() >= 0.4 and s.has_recurrence()
+    print(f"    overlap tags {s.overlap_stats()}")
 
 # ---- 4. arms on a synthetic z stream (change at cycle 300 -> z = 4) -------------------------------------------
 cycle_s = 0.4

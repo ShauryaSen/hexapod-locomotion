@@ -24,10 +24,11 @@ parser.add_argument("--out_dir", required=True)
 args = parser.parse_args()
 cfg = C.ScheduleCfg(t50_min=args.t50_min)
 os.makedirs(args.out_dir, exist_ok=True)
-md = [f"# Change schedules, T50 = {args.t50_min} min, mean gap {cfg.mean_gap_factor * args.t50_min:.1f} min, length {(cfg.warmup_s + cfg.n_changes_target * cfg.mean_gap_factor * args.t50_min * 60) / 60:.1f} min", "", "| seed | split | changes | nominal frac | recurrence | events (min: factor on/off) |", "|---|---|---|---|---|---|"]
+md = [f"# Change schedules, T50 = {args.t50_min} min, mean gap {cfg.mean_gap_factor * args.t50_min:.1f} min, length {(cfg.warmup_s + cfg.n_changes_target * cfg.mean_gap_factor * args.t50_min * 60) / 60:.1f} min", "", "| seed | split | changes | nominal frac | recurrence | overlaps (count / min / max on) | events (min: factor on/off) |", "|---|---|---|---|---|---|---|"]
 for seed in args.seeds:
     s = generate_schedule(seed, cfg)
     s.save(os.path.join(args.out_dir, f"schedule_seed{seed}.json"))
-    md.append(f"| {seed} | {s.cfg['split']} | {len(s.events)} | {s.nominal_fraction():.2f} | {s.has_recurrence()} | " + ", ".join(f"{e.t_s / 60:.1f}: {e.factor} {'on' if e.on else 'off'}" for e in s.events) + " |")
+    ov = s.overlap_stats()
+    md.append(f"| {seed} | {s.cfg['split']} | {len(s.events)} | {s.nominal_fraction():.2f} | {s.has_recurrence()} | {ov['overlap_count']} / {ov['overlap_s'] / 60:.1f} / {ov['max_concurrent']} | " + ", ".join(f"{e.t_s / 60:.1f}: {e.factor} {'on' if e.on else 'off'}" for e in s.events) + " |")
 open(os.path.join(args.out_dir, "schedules.md"), "w").write("\n".join(md) + "\n")
 print("\n".join(md))

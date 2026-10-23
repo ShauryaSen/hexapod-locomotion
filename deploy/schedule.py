@@ -61,6 +61,22 @@ class Schedule:
                 nominal += b - a
         return nominal / self.length_s
 
+    def overlap_stats(self) -> dict:
+        """Stretches with two or more factors on at once (the overlap question for Shaurya, 2026-10-23): count of
+        maximal stretches, their total seconds, and the maximum number of factors on at the same time."""
+        ts = [0.0] + [e.t_s for e in self.events] + [self.length_s]
+        count, secs, max_on, prev = 0, 0.0, 0, False
+        for a, b in zip(ts[:-1], ts[1:]):
+            n_on = sum(self.state_at(a).values())
+            max_on = max(max_on, n_on)
+            over = n_on >= 2
+            if over:
+                secs += b - a
+                if not prev:
+                    count += 1
+            prev = over
+        return {"overlap_count": count, "overlap_s": secs, "max_concurrent": max_on}
+
     def onsets(self, factor: str) -> list[float]:
         return [e.t_s for e in self.events if e.factor == factor and e.on]
 
@@ -97,6 +113,7 @@ def generate_schedule(seed: int, cfg: ScheduleCfg, max_tries: int = 10000) -> Sc
             continue
         s.cfg["tries"] = _ + 1
         s.cfg["split"] = "tune" if seed in cfg.tune_seeds else "test" if seed in cfg.test_seeds else "other"  # R2
+        s.cfg.update(s.overlap_stats())  # tag only: the generator does not restrict overlaps (Shaurya's call)
         return s
     raise RuntimeError(f"no schedule satisfied the constraints in {max_tries} draws (seed {seed})")
 
