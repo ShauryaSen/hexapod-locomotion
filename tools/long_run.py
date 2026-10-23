@@ -97,6 +97,15 @@ obs = env.reset()[0]
 env._commands[:, 0], env._commands[:, 1], env._commands[:, 2] = 0.0, -args.cmd, 0.0
 obs = env._get_observations()
 
+# per-fall log (supervisor 10-23: do falls cluster right after a reset or a reposition? which terrain cells?)
+if env._has_terrain_levels:
+    _names = env.terrain_type_names
+    cell_of = [(int(levels[e]), f"{_names[int(types[e])]}#{int(types[e])}") for e in range(N)]
+else:
+    cell_of = [(0, "flat")] * N
+since_reset = torch.zeros(N, dtype=torch.long, device=dev)  # steps since this env's last reset (fall or reposition)
+fall_events = []
+
 steps_per_window = int(args.window * 60.0 / env.step_dt)
 n_windows = int(args.minutes / args.window + 1e-6)
 windows = []
@@ -112,11 +121,23 @@ for w in range(n_windows):
             env._reset_idx(ids.to(torch.int32))
             env._commands[:, 0], env._commands[:, 1], env._commands[:, 2] = 0.0, -args.cmd, 0.0
             obs = env._get_observations()
+            since_reset.zero_()
         with torch.no_grad():
             act = actor(obs)
         obs_d, rew, terminated, truncated, _ = env.step(act)
         obs = obs_d
         falls += int(terminated.sum().item())
+        since_reset += 1
+        if terminated.any():
+            g = w * steps_per_window + i_step
+            for e in terminated.nonzero().flatten().tolist():
+                fall_events.append({
+                    "t_s": round(g * env.step_dt, 3), "window": w, "env": e, "level": cell_of[e][0], "type": cell_of[e][1],
+                    "s_since_env_reset": round(int(since_reset[e]) * env.step_dt, 3),
+                    "s_into_reposition_cycle": round(((g % repo_steps) + 1) * env.step_dt, 3) if repo_steps else None,
+                })
+                print("[long_run] fall " + json.dumps(fall_events[-1]), flush=True)
+            since_reset[terminated] = 0  # the env auto-resets after a fall
         v = -env._robot.data.root_lin_vel_b.torch[:, 1]
         rew_sum += rew.mean().item()
         verr_sum += (v - args.cmd).abs().mean().item()
@@ -134,9 +155,19 @@ summary = {
     "checkpoint": args.checkpoint, "task": args.task, "cmd": args.cmd, "minutes": args.minutes, "num_envs": N,
     "levels": args.levels if env._has_terrain_levels else ["flat"], "dr": args.dr, "applied": applied, "reposition_s": args.reposition_s,
     "falls_total": total_falls, "falls_per_robot_hour": total_falls / (N * args.minutes / 60.0),
-    "drift_last_vs_first": drift, "windows": windows,
+    "drift_last_vs_first": drift, "windows": windows, "fall_events": fall_events,
 }
-print(json.dumps({k: v for k, v in summary.items() if k != "windows"}, indent=1))
+if fall_events:
+    import collections
+
+    by_type = collections.Counter(f["type"].split("#")[0] for f in fall_events)
+    by_level = collections.Counter(f["level"] for f in fall_events)
+    early = sum(f["s_since_env_reset"] <= 1.0 for f in fall_events)
+    summary["falls_by_type"] = dict(by_type)
+    summary["falls_by_level"] = {str(k): v for k, v in sorted(by_level.items())}
+    summary["falls_within_1s_of_env_reset"] = early
+    print(f"[long_run] falls by type {dict(by_type)}; by level {summary['falls_by_level']}; within 1 s of a reset: {early}/{len(fall_events)}")
+print(json.dumps({k: v for k, v in summary.items() if k not in ("windows", "fall_events")}, indent=1))
 out_dir = os.path.join(os.path.dirname(args.checkpoint), "eval")
 os.makedirs(out_dir, exist_ok=True)
 base = os.path.splitext(os.path.basename(args.checkpoint))[0] + "_longrun" + (f"_{args.tag}" if args.tag else "")
