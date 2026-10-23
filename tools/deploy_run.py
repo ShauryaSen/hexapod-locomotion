@@ -45,6 +45,7 @@ parser.add_argument("--fall_recovery_s", type=float, default=None)
 parser.add_argument("--reposition_s", type=float, default=None)
 parser.add_argument("--env_seed", type=int, default=0)
 parser.add_argument("--env_override", nargs="*", default=[])
+parser.add_argument("--init", nargs="*", default=[], help="world state from t = 0 for every deployment through the runtime setters (hold), e.g. friction=0.175 payload=2.5 motor=0.6; the PhysX read-back of each env is stored in meta.json")
 parser.add_argument("--out_root", default="/workspace/isaaclab/logs/deploy")
 parser.add_argument("--tag", default="")
 parser.add_argument("--progress_every_min", type=float, default=1.0)
@@ -139,11 +140,26 @@ else:
     arm_of_env = [args.arm] * N
     label_of_env = [arm_label(acfg, detcfg)] * N
 applier = ScheduleApplier(env, schedules, scfg)
+init_readback = None
+if args.init:
+    import warp as wp
+
+    kv = {k: float(v) for k, v in (x.split("=") for x in args.init)}
+    applier.set_all(payload=kv.get("payload"), motor=kv.get("motor"), friction=kv.get("friction"))
+    mat = wp.to_torch(env._robot.root_view.get_material_properties())
+    init_readback = {
+        "requested": kv,
+        "material_static_per_env": mat[:, :, 0].mean(1).tolist(), "material_static_min_max": [float(mat[:, :, 0].min()), float(mat[:, :, 0].max())],
+        "material_dynamic_min_max": [float(mat[:, :, 1].min()), float(mat[:, :, 1].max())],
+        "dr_friction_per_env": env.dr_friction.tolist(), "dr_delta_mass_per_env": env.dr_delta_mass.tolist(), "dr_motor_strength_per_env": env.dr_motor_strength.tolist(),
+        "ground_static": float(env.cfg.terrain.physics_material.static_friction), "ground_combine": env.cfg.terrain.physics_material.friction_combine_mode,
+    }
+    print("[deploy] init state:", kv, "material static min/max", init_readback["material_static_min_max"], "dr_friction min/max", min(init_readback["dr_friction_per_env"]), max(init_readback["dr_friction_per_env"]), flush=True)
 runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"], preproc=preproc)
 
 meta = {
     "checkpoint": args.checkpoint, "task": args.task, "num_envs": N, "arm": args.arm, "arm_label": arm_label(acfg, detcfg) if not args.arms else "multi", "arm_of_env": arm_of_env, "arm_label_of_env": label_of_env, "replicate_of_env": replicate_of_env, "arms_spec": args.arms, "tag": args.tag, "minutes": minutes,
-    "rma_student": info.get("rma_student") is not None, "schedule_split": [None if s is None else ("tune" if s.seed in scfg.tune_seeds else "test" if s.seed in scfg.test_seeds else "other") for s in schedules],
+    "rma_student": info.get("rma_student") is not None, "init_state": init_readback, "schedule_split": [None if s is None else ("tune" if s.seed in scfg.tune_seeds else "test" if s.seed in scfg.test_seeds else "other") for s in schedules],
     "schedule_seeds": None if args.no_schedule else args.schedule_seeds, "env_schedule_seed": [None if s is None else s.seed for s in schedules],
     "ensemble": args.ensemble, "cusum_h": args.cusum_h, "env_applied": applied, "step_dt": env.step_dt,
     "deploy_cfg": C.to_dict(dcfg), "updater_cfg": C.to_dict(ucfg), "schedule_cfg": C.to_dict(scfg), "arm_cfg": C.to_dict(acfg), "detector_cfg": C.to_dict(detcfg),
