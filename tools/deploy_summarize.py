@@ -38,6 +38,7 @@ parser.add_argument("--root", required=True, help="directory of deploy_run.py ou
 parser.add_argument("--out", default=None, help="markdown output (default <root>/summary.md)")
 parser.add_argument("--detect_window_min", type=float, default=None)
 parser.add_argument("--bootstrap_n", type=int, default=1000)
+parser.add_argument("--min_pairs", type=int, default=10, help="H1 / H2 verdicts need at least this many paired test deployments (ASSUMED; a bootstrap over a handful of pairs is not a test); below it the row says 'insufficient'")
 parser.add_argument("--label_by_tag", action="store_true", help="append the run tag to the arm label (pilot comparisons of updater settings; off for the main study, where the label is the arm and its knob only)")
 args = parser.parse_args()
 mcfg = C.MetricsCfg(detect_window_min=args.detect_window_min, bootstrap_n=args.bootstrap_n)
@@ -65,6 +66,9 @@ for meta_path in sorted(glob.glob(os.path.join(args.root, "**", "meta.json"), re
         m = deployment_metrics(arrays, i, s, mcfg, budget)
         if not m:
             continue
+        if ((meta.get("arm_of_env") or [meta["arm"]] * len(meta["env_schedule_seed"]))[i]) == "never":
+            # detection metrics do not apply to an arm that never adapts
+            m.update({"detection_delay_s": float("nan"), "missed": float("nan"), "false_alarms": float("nan"), "false_alarms_per_h": float("nan")})
         split = (meta.get("schedule_split") or [None] * len(meta["env_schedule_seed"]))[i]
         if split is None and seed is not None:
             split = "tune" if seed in scfg.tune_seeds else "test" if seed in scfg.test_seeds else "other"
@@ -150,10 +154,10 @@ trig = [selected[f] for f in ("cusum", "three_sigma") if f in selected]
 if trig and "scheduled" in selected:
     best_trig = max(trig, key=lambda g: np.mean([r["progress_m"] for r in tune if r["arm_label"] == g]))
     d = paired_diff(best_trig, selected["scheduled"], test)
-    hyp.append(("H1: best trigger - best schedule (test, progress [m])", best_trig, selected["scheduled"], d, "holds (CI excludes 0, positive)" if d and d["ci"][0] > 0 else "fails" if d else "no paired test deployments"))
+    hyp.append(("H1: best trigger - best schedule (test, progress [m])", best_trig, selected["scheduled"], d, ("insufficient pairs" if d and d["n"] < args.min_pairs else "holds (CI excludes 0, positive)" if d and d["ci"][0] > 0 else "fails") if d else "no paired test deployments"))
 if "always" in selected and "never" in selected:
     d = paired_diff("always", "never", test, "quiet_progress_m")
-    hyp.append(("H2: always - never on quiet stretches (test, progress [m])", "always", "never", d, "holds (CI excludes 0, negative = cost)" if d and d["ci"][1] < 0 else "fails" if d else "no paired test deployments"))
+    hyp.append(("H2: always - never on quiet stretches (test, progress [m])", "always", "never", d, ("insufficient pairs" if d and d["n"] < args.min_pairs else "holds (CI excludes 0, negative = cost)" if d and d["ci"][1] < 0 else "fails") if d else "no paired test deployments"))
 # R7: updater seeds per (pi_0, deployment)
 seed_counts = {}
 for r in rows:
