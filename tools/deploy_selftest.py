@@ -96,6 +96,19 @@ with torch.no_grad():
 assert (m_reset[0] - mean0[0, 0]).abs().max() < 1e-5, "reset_to_pi0 failed"
 print("[2] reset_to_pi0 ok")
 
+# ---- 2b. per-deployment batch length: half the slices at 2x batch get half as many updates
+upd2 = KLAnchoredPPO(actor, critic, info["actor"], C.UpdaterCfg(steps_per_batch=100, learning_rate=1e-4), dev, OBS)
+upd2.set_batch_steps(torch.arange(N, device=dev) >= N // 2, 200)
+allm = torch.ones(N, dtype=torch.bool, device=dev)
+o_ = torch.randn(N, OBS, device=dev)
+for _ in range(400):
+    a_, lp_, v_, m_, s_ = upd2.act(o_, allm)
+    upd2.store(allm, o_, a_, lp_, v_, a_[:, 0], torch.zeros(N, dtype=torch.bool, device=dev), m_, s_)
+    o_ = torch.randn(N, OBS, device=dev)
+    upd2.maybe_update(o_)
+print(f"[2b] per-slice batch: updates per slice {upd2.n_updates.tolist()} (expect 4 for batch 100, 2 for batch 200)")
+assert upd2.n_updates[: N // 2].eq(4).all() and upd2.n_updates[N // 2 :].eq(2).all()
+
 # ---- 3. schedules ---------------------------------------------------------------------------------------------
 scfg = C.ScheduleCfg(t50_min=2.0)
 for seed in range(3):

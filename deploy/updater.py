@@ -35,7 +35,7 @@ class KLAnchoredPPO:
         self.params = params
         self.opt = BatchedAdam(params, self.n, cfg.learning_rate)
         T = cfg.steps_per_batch
-        self.T = T
+        self.T = T  # buffer length = the largest per-deployment batch (set_batch_steps can raise it before the run)
         A = actor.act_dim
         z = lambda *s: torch.zeros(*s, device=device)
         self.buf = {
@@ -52,6 +52,16 @@ class KLAnchoredPPO:
         self.kl_w = torch.full((self.n,), float(cfg.kl_anchor_weight), device=device)
         self.explore_enabled = torch.ones(self.n, dtype=torch.bool, device=device)
         self.update_enabled = torch.ones(self.n, dtype=torch.bool, device=device)
+        self.batch_steps = torch.full((self.n,), T, dtype=torch.long, device=device)
+
+    def set_batch_steps(self, mask: torch.Tensor, steps: int):
+        """Per-deployment PPO batch length (robot steps); grows the buffer if needed. Call before the run."""
+        if steps > self.T:
+            for k, v in self.buf.items():
+                pad = torch.zeros((steps - self.T, *v.shape[1:]), device=v.device, dtype=v.dtype)
+                self.buf[k] = torch.cat([v, pad], 0)
+            self.T = steps
+        self.batch_steps[mask] = steps
 
     # ---- acting ---------------------------------------------------------------------------------------------
     @torch.no_grad()
@@ -99,21 +109,21 @@ class KLAnchoredPPO:
     # ---- update ---------------------------------------------------------------------------------------------
     def maybe_update(self, next_obs: torch.Tensor) -> torch.Tensor:
         """Update every deployment whose buffer is full. Returns the mask of updated deployments."""
-        full = self.ptr >= self.T
+        full = self.ptr >= self.batch_steps
         if not bool(full.any()):
             return full
-        if bool((full & self.update_enabled).any()):
-            self._update(full & self.update_enabled, next_obs)
+        todo = full & self.update_enabled
+        for T_i in torch.unique(self.batch_steps[todo]).tolist():
+            self._update(todo & (self.batch_steps == T_i), next_obs, int(T_i))
         self.ptr[full] = 0
         done = full & self.update_enabled
         self.n_updates[done] += 1
         return done
 
-    def _gae(self, full: torch.Tensor, next_obs: torch.Tensor):
+    def _gae(self, full: torch.Tensor, next_obs: torch.Tensor, T: int):
         cfg = self.cfg
         with torch.no_grad():
             last_v = self.critic(next_obs)
-        T = self.T
         adv = torch.zeros(T, self.n, device=self.device)
         gae = torch.zeros(self.n, device=self.device)
         for t in reversed(range(T)):
@@ -122,16 +132,16 @@ class KLAnchoredPPO:
             delta = self.buf["rew"][t] + cfg.gamma * nv * nonterm - self.buf["value"][t]
             gae = delta + cfg.gamma * cfg.lam * nonterm * gae
             adv[t] = gae
-        ret = adv + self.buf["value"]
+        ret = adv + self.buf["value"][:T]
         # per-deployment advantage normalization over its own T samples
         adv = (adv - adv.mean(0, keepdim=True)) / (adv.std(0, keepdim=True) + 1e-8)
         return adv, ret
 
-    def _update(self, full: torch.Tensor, next_obs: torch.Tensor):
+    def _update(self, full: torch.Tensor, next_obs: torch.Tensor, T: int | None = None):
         cfg = self.cfg
-        adv, ret = self._gae(full, next_obs)
-        T = self.T
-        obs_all = self.buf["obs"]  # (T, n, obs)
+        T = self.T if T is None else T
+        adv, ret = self._gae(full, next_obs, T)
+        obs_all = self.buf["obs"][:T]  # (T, n, obs)
         with torch.no_grad():
             pi0_mean, pi0_std = self.pi0(obs_all.reshape(T * self.n, -1).unsqueeze(0))
             pi0_mean = pi0_mean.reshape(T, self.n, -1)

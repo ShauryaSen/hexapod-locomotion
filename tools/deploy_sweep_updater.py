@@ -35,7 +35,7 @@ parser.add_argument("--run_dir", default=None)
 parser.add_argument("--task", default="Hexapod-Rough-Direct-v0")
 parser.add_argument("--factor", default="motor", choices=["payload", "motor", "friction"])
 parser.add_argument("--value", type=float, required=True)
-parser.add_argument("--groups", nargs="+", required=True, help="name:lr:kl_weight:explore(0/1)")
+parser.add_argument("--groups", nargs="+", required=True, help="name:lr:kl_weight:explore(0/1)[:std_scale[:batch_steps]] (std_scale multiplies pi_0's action std at the start of the fine-tune; batch_steps = this group's PPO batch length)")
 parser.add_argument("--per_group", type=int, default=12)
 parser.add_argument("--t_on", type=float, default=60.0)
 parser.add_argument("--budget_min", type=float, default=8.0)
@@ -64,8 +64,11 @@ from hexapod.deploy.updater import KLAnchoredPPO  # noqa: E402
 
 groups = []
 for g in args.groups:
-    name, lr, kl, ex = g.split(":")
-    groups.append({"name": name, "lr": float(lr), "kl_weight": float(kl), "explore": bool(int(ex))})
+    parts = g.split(":")
+    name, lr, kl, ex = parts[:4]
+    std_scale = float(parts[4]) if len(parts) > 4 else 1.0
+    batch = int(parts[5]) if len(parts) > 5 else None
+    groups.append({"name": name, "lr": float(lr), "kl_weight": float(kl), "explore": bool(int(ex)), "std_scale": std_scale, "batch_steps": batch})
 G, R = len(groups), args.per_group
 N = G * R
 dcfg = C.DeployCfg(task=args.task, env_seed=args.env_seed)
@@ -91,6 +94,11 @@ for i, g in enumerate(groups):
     updater.kl_w[m] = g["kl_weight"]
     updater.explore_enabled[m] = g["explore"]
     updater.update_enabled[m] = g["lr"] > 0
+    if g["std_scale"] != 1.0:
+        with torch.no_grad():
+            actor.std_param[m] *= g["std_scale"]  # ASSUMED: smaller exploration noise for the fine-tune (pi_0 itself unchanged)
+    if g["batch_steps"]:
+        updater.set_batch_steps(m, g["batch_steps"])
 sched = Schedule(seed=-1, length_s=args.minutes * 60.0, events=[ChangeEvent(args.t_on, args.factor, True)], cfg={"manual": True, "value": args.value})
 schedules = [sched] * N
 arm = make_arm("oracle", N, C.ArmCfg(name="oracle", budget_min=args.budget_min), ucfg, detcfg, dev, dcfg.gait_cycle_s, schedules)
@@ -126,6 +134,7 @@ for i, g in enumerate(groups):
     rows.append(row)
 ctrl = next((r for r in rows if r["lr"] == 0 and not r["explore"]), None)
 md = [f"# Updater sweep: {args.factor} = {args.value} at {args.t_on:.0f} s, {R} robots per group, adapt {args.budget_min:g} min then hold (deterministic) to {args.minutes:g} min", "",
+      "groups: " + "; ".join(f"{g['name']} = lr {g['lr']:g}, KL {g['kl_weight']:g}, explore {int(g['explore'])}, std x{g['std_scale']:g}, batch {g['batch_steps'] or ucfg.steps_per_batch}" for g in groups), "",
       f"checkpoint `{os.path.basename(os.path.dirname(args.checkpoint))}/{os.path.basename(args.checkpoint)}`; {ucfg.steps_per_batch} steps/batch, {ucfg.num_learning_epochs} epochs, entropy {ucfg.entropy_coef}; progress capped at the command (R4). Rates in m/min per robot, mean [95% bootstrap CI over robots].", "",
       "| group | lr | KL weight | explore | before change | adapting | hold (adapted weights, no noise) | hold - control hold | falls before / adapting / hold | updates per robot | KL to pi_0 at end |",
       "|---|---|---|---|---|---|---|---|---|---|---|"]
