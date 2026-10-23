@@ -33,6 +33,7 @@ parser.add_argument("--cycle_s", type=float, default=0.4)
 parser.add_argument("--out", default=None, help="default: <ensemble dir>/cusum_calibration.json")
 parser.add_argument("--set_calibration_from", default=None, help="calib_streams.npz or run dir whose residual stream sets the ensemble's nominal statistics (raw and log), written back into ensemble.pt")
 parser.add_argument("--transform", default=None, help="override EnsembleCfg.residual_transform (log | none) and write it into ensemble.pt")
+parser.add_argument("--baseline_cycles", type=int, default=None, help="R5: reproduce the runner's per-deployment baseline: the first N cycles of each stream set its mean (no alarms there), z = (x - mu_deployment) / sigma_global on the rest. Default DetectorCfg.baseline_cycles; 0 = global mean")
 args = parser.parse_args()
 
 det = C.DetectorCfg()
@@ -60,10 +61,24 @@ for p in args.streams:
     else:
         r = np.load(p)["residual"]
         sources.append(("calib", p, r.shape))
-    z = ens.standardize_np(r)
-    zs.extend([z[:, i] for i in range(z.shape[1])])
+    nb = det.baseline_cycles if args.baseline_cycles is None else args.baseline_cycles
+    if nb > 0:
+        x = np.log(np.clip(r, 1e-12, None)) if ens.cfg.residual_transform == "log" else r
+        sd = float(ens.nominal_sigma_log) if ens.cfg.residual_transform == "log" else float(ens.nominal_sigma)
+        for i in range(x.shape[1]):
+            col = x[:, i]
+            valid = np.where(~np.isnan(col))[0]
+            if len(valid) <= nb:
+                continue
+            mu_i = col[valid[:nb]].mean()
+            zi = (col - mu_i) / sd
+            zi[: valid[nb - 1] + 1] = np.nan  # no alarms while the baseline is measured
+            zs.append(zi)
+    else:
+        z = ens.standardize_np(r)
+        zs.extend([z[:, i] for i in range(z.shape[1])])
 cal = calibrate_cusum_h(zs, args.cycle_s, k, target, h_grid=np.concatenate([np.arange(0.5, 10.0, 0.25), np.arange(10.0, 200.0, 2.0)]))
-cal.update({"transform": ens.cfg.residual_transform, "nominal_mu": float(ens.nominal_mu), "nominal_sigma": float(ens.nominal_sigma), "nominal_mu_log": float(ens.nominal_mu_log), "nominal_sigma_log": float(ens.nominal_sigma_log), "sources": [list(s) for s in sources], "n_streams": len(zs),
+cal.update({"baseline_cycles": det.baseline_cycles if args.baseline_cycles is None else args.baseline_cycles, "transform": ens.cfg.residual_transform, "nominal_mu": float(ens.nominal_mu), "nominal_sigma": float(ens.nominal_sigma), "nominal_mu_log": float(ens.nominal_mu_log), "nominal_sigma_log": float(ens.nominal_sigma_log), "sources": [list(s) for s in sources], "n_streams": len(zs),
             "three_sigma_fa_per_hour": {f"x{m}": three_sigma_fa_rate(zs, args.cycle_s, det.three_sigma_k, m) for m in (1, 2, 3, 5)},
             "z_stats": {"mean": float(np.nanmean(np.concatenate(zs))), "std": float(np.nanstd(np.concatenate(zs))), "p99": float(np.nanpercentile(np.concatenate(zs), 99)), "max": float(np.nanmax(np.concatenate(zs)))}})
 out = args.out or os.path.join(os.path.dirname(args.ensemble), "cusum_calibration.json")
