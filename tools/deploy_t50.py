@@ -116,7 +116,9 @@ def run_value(value: float, out_dir: str, arms):
       runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"])
       summary = runner.run(args.minutes)
       sub = os.path.join(out_dir, arm_name)
-      runner.stream.save(sub, {"arm": arm_name, "checkpoint": args.checkpoint, "factor": args.factor, "t_on": args.t_on, "env_applied": applied, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg)})
+      runner.stream.save(sub, {"arm": arm_name, "checkpoint": args.checkpoint, "factor": args.factor, "value": value, "t_on": args.t_on, "env_applied": applied, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg),
+                                 "levels_per_env": env._terrain.terrain_levels.tolist() if env._has_terrain_levels else None,
+                                 "types_per_env": [env.terrain_type_names[int(c)] for c in env._terrain.terrain_types.tolist()] if env._has_terrain_levels else None})
       json.dump(summary, open(os.path.join(sub, "summary.json"), "w"), indent=1)
       runs[arm_name] = runner.stream.arrays()
       env.release_dr(ids)
