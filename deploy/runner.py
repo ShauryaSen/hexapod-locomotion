@@ -50,16 +50,17 @@ class DeploymentRunner:
             self.baseliner = Baseliner(self.n, nb, sd_g, mu_g, self.dev)
 
 
-    def run(self, minutes: float, progress_every_min: float = 1.0) -> dict:
+    def run(self, minutes: float, progress_every_min: float = 1.0, on_minute=None) -> dict:
+        """``on_minute(t_s)`` is called at every whole robot-minute (e.g. to save policy snapshots)."""
         env, cfg, upd, arm = self.env, self.cfg, self.updater, self.arm
         n, dev, dt = self.n, self.dev, self.dt
         total_steps = int(round(minutes * 60.0 / dt))
         obs = policy_obs(env)
         recover_left = torch.zeros(n, dtype=torch.long, device=dev)
         zeros = torch.zeros(n, device=dev)
-        state = arm.cycle(0.0, torch.full((n,), float("nan"), device=dev))
-        adapt = state["adapt"]
-        pending_alarm, pending_reset = state["alarm"].float(), state["reset"].float()
+        state = arm.cycle(0.0, torch.full((upd.ns,), float("nan"), device=dev))
+        adapt = upd.env_view(state["adapt"])
+        pending_alarm, pending_reset = upd.env_view(state["alarm"]).float(), upd.env_view(state["reset"]).float()
         if bool(state["reset"].any()):
             upd.reset_to_pi0(state["reset"], self.pi0_critic)
         acc = self._new_acc()
@@ -122,12 +123,14 @@ class DeploymentRunner:
                 total_prog += acc["prog"]
                 total_falls += acc["falls"]
                 acc = self._new_acc()
+            if on_minute is not None and (step + 1) % int(round(60.0 / dt)) == 0:
+                on_minute((step + 1) * dt)
             if t + dt >= next_print - 1e-9:
                 el = time.time() - t_wall
                 self.log(f"[deploy] {next_print / 60:.0f} min robot time, {el / 60:.1f} min wall ({(step + 1) / el:.1f} steps/s); progress mean {total_prog.mean():.2f} m, falls {int(total_falls.sum())}, adapting {int(adapt.sum())}/{n}, updates {int(upd.n_updates.sum())}")
                 next_print += progress_every_min * 60.0
         wall = time.time() - t_wall
-        return {"minutes": minutes, "steps": total_steps, "wall_s": wall, "steps_per_s": total_steps / wall, "progress_mean_m": total_prog.mean().item(), "progress_per_env_m": total_prog.tolist(), "falls_total": int(total_falls.sum().item()), "falls_per_env": total_falls.tolist(), "updates_per_env": upd.n_updates.tolist(), "events": self.events}
+        return {"minutes": minutes, "steps": total_steps, "wall_s": wall, "steps_per_s": total_steps / wall, "progress_mean_m": total_prog.mean().item(), "progress_per_env_m": total_prog.tolist(), "falls_total": int(total_falls.sum().item()), "falls_per_env": total_falls.tolist(), "updates_per_env": upd.env_view(upd.n_updates).tolist(), "events": self.events}
 
     def _peek(self, obs):
         """Policy input for a next-obs value function without advancing the history buffer."""
@@ -165,25 +168,35 @@ class DeploymentRunner:
         s.set("alarm", pending_alarm)
         s.set("policy_reset", pending_reset)
         s.set("updates", acc["updates"])
-        s.set("kl_pi0", self.updater.last_kl_pi0)
+        s.set("kl_pi0", self.updater.env_view(self.updater.last_kl_pi0))
         s.set("payload_kg", self.applier.payload)
         s.set("motor_strength", self.applier.motor)
         s.set("friction", self.applier.friction)
-        s.set("budget_used_min", self.arm.budget_used)
+        s.set("budget_used_min", self.updater.env_view(self.arm.budget_used))
         s.set("baseline_mu", self.baseliner.mu if self.baseliner is not None else nanv)
         s.commit()
-        state = self.arm.cycle(t_end, z)
+        upd = self.updater
+        # the arm decides per deployment; with k robots per deployment its z is the mean over the robots' z (ASSUMED)
+        z_arm = z if upd.identity else self._slice_nanmean(z)
+        state = self.arm.cycle(t_end, z_arm)
         rebase = state.get("rebaseline", state["stopped"] if getattr(self.arm, "rebaseline_on_stop", False) else None)
         if self.baseliner is not None and rebase is not None and bool(rebase.any()):
-            self.baseliner.restart(rebase)  # R5: re-measure the nominal level after every detector-arm episode
-        new_adapt = state["adapt"]
+            self.baseliner.restart(upd.env_view(rebase))  # R5: re-measure the nominal level after every detector-arm episode
+        new_adapt = upd.env_view(state["adapt"])
         ended = adapt & ~new_adapt
         if bool(ended.any()):
-            self.updater.truncate(ended, obs)
-            self.updater.drop_buffer(ended)  # samples from before a hold are not reused (ASSUMED)
+            upd.truncate(ended, obs)
+            upd.drop_buffer(ended)  # samples from before a hold are not reused (ASSUMED)
         if bool(state["reset"].any()):
-            self.updater.reset_to_pi0(state["reset"], self.pi0_critic)
-        started = state["new"] | state["restart"]
+            upd.reset_to_pi0(state["reset"], self.pi0_critic)
+        started = upd.env_view(state["new"] | state["restart"])
         if bool(started.any()):
-            self.updater.drop_buffer(started)
-        return new_adapt, state["alarm"].float(), state["reset"].float()
+            upd.drop_buffer(started)
+        return new_adapt, upd.env_view(state["alarm"]).float(), upd.env_view(state["reset"]).float()
+
+    def _slice_nanmean(self, z: torch.Tensor) -> torch.Tensor:
+        upd = self.updater
+        valid = ~torch.isnan(z)
+        s_ = torch.zeros(upd.ns, device=self.dev).index_add_(0, upd.sid, torch.where(valid, z, torch.zeros_like(z)))
+        c_ = torch.zeros(upd.ns, device=self.dev).index_add_(0, upd.sid, valid.float())
+        return torch.where(c_ > 0, s_ / c_.clamp_min(1), torch.full_like(s_, float("nan")))

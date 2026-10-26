@@ -61,6 +61,18 @@ class BatchedMLP(nn.Module):
                 x = self.act(x)
         return x.squeeze(1) if squeeze else x
 
+    def forward_gather(self, x: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
+        """Per-row slice selection: row r of ``x`` ((m, B, in) or (m, in)) uses slice ``idx[r]``. Gradients flow back to
+        the slices (summed over the rows that use them): k robots of one deployment share one slice."""
+        squeeze = x.dim() == 2
+        if squeeze:
+            x = x.unsqueeze(1)
+        for i in range(self.n_layers):
+            x = torch.baddbmm(self.biases[i][idx].unsqueeze(1), x, self.weights[i][idx].transpose(1, 2))
+            if i < self.n_layers - 1:
+                x = self.act(x)
+        return x.squeeze(1) if squeeze else x
+
     def forward_vmap(self, x: torch.Tensor) -> torch.Tensor:
         """Same function through torch.func.vmap over a per-slice functional MLP (for the benchmark)."""
         ws = [w for w in self.weights]
@@ -126,6 +138,17 @@ class BatchedGaussianActor(nn.Module):
             std = std.unsqueeze(1).expand_as(mean)
         return mean, std
 
+    def forward_gather(self, obs: torch.Tensor, idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        mean = self.mlp.forward_gather(obs, idx)
+        std = self.std_param[idx].clamp_min(1e-4)
+        if mean.dim() == 3:
+            std = std.unsqueeze(1).expand_as(mean)
+        return mean, std
+
+    def last_layer_params(self) -> list[torch.Tensor]:
+        """The parameters option 3a fine-tunes: the output layer and the action std."""
+        return [self.mlp.weights[-1], self.mlp.biases[-1], self.std_param]
+
     @staticmethod
     def log_prob(mean, std, act) -> torch.Tensor:
         var = std * std
@@ -164,6 +187,9 @@ class BatchedCritic(nn.Module):
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
         return self.mlp(obs).squeeze(-1)
 
+    def forward_gather(self, obs: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
+        return self.mlp.forward_gather(obs, idx).squeeze(-1)
+
     def load_rsl_rl(self, critic_sd: dict, idx=None):
         self.mlp.load_sequential_state(critic_sd, idx=idx)
 
@@ -184,6 +210,9 @@ class BatchedAdam:
         self.m = [torch.zeros_like(p) for p in params]
         self.v = [torch.zeros_like(p) for p in params]
         self.t = torch.zeros(n, device=params[0].device)
+        self.param_mask: list[torch.Tensor | None] = [None] * len(params)
+        """Per parameter: (n,) bool of slices allowed to update it (None = all). Option 3a sets the hidden layers of the
+        actor to False for its slices. With no mask set every code path is the unmasked one."""
 
     def zero_grad(self):
         for p in self.params:
@@ -191,7 +220,11 @@ class BatchedAdam:
 
     @torch.no_grad()
     def clip_grad_norm(self, max_norm: float, mask: torch.Tensor) -> torch.Tensor:
-        """Per-slice global grad-norm clipping (rsl_rl clips over actor+critic jointly, max_grad_norm 1.0)."""
+        """Per-slice global grad-norm clipping (rsl_rl clips over actor+critic jointly, max_grad_norm 1.0). Gradients of
+        parameters a slice may not update (param_mask) are zeroed first, so they do not enter its norm."""
+        for p, pm in zip(self.params, self.param_mask):
+            if pm is not None and p.grad is not None:
+                p.grad.mul_(pm.float().view(-1, *([1] * (p.dim() - 1))))
         sq = torch.zeros(self.n, device=self.lr.device)
         for p in self.params:
             if p.grad is not None:
@@ -211,12 +244,12 @@ class BatchedAdam:
         self.t += maskf
         bc1 = 1 - self.b1 ** self.t.clamp_min(1)
         bc2 = 1 - self.b2 ** self.t.clamp_min(1)
-        for p, m, v in zip(self.params, self.m, self.v):
+        for p, m, v, pm in zip(self.params, self.m, self.v, self.param_mask):
             if p.grad is None:
                 continue
             g = p.grad
             shp = (-1, *([1] * (p.dim() - 1)))
-            mk = maskf.view(shp)
+            mk = maskf.view(shp) if pm is None else (mask & pm).float().view(shp)
             m.mul_(1 - mk * (1 - self.b1)).add_(mk * (1 - self.b1) * g)
             v.mul_(1 - mk * (1 - self.b2)).add_(mk * (1 - self.b2) * g * g)
             m_hat = m / bc1.view(shp)
