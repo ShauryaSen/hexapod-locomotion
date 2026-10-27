@@ -19,7 +19,7 @@ import yaml
 parser = argparse.ArgumentParser()
 parser.add_argument("--run_dir", required=True)
 parser.add_argument("--dr", nargs="*", default=[], help="dr field=lo,hi replacements, e.g. motor_strength_range=0.6,0.6")
-parser.add_argument("--agent_set", nargs="*", default=[], help="extra agent.key=value overrides (after the saved ones)")
+parser.add_argument("--agent_set", nargs="*", default=[], help="extra env./agent. key=value overrides; replace a saved override of the same key (Hydra rejects duplicates)")
 args = parser.parse_args()
 
 SKIP_ENV = {"seed", "log_dir", "num_envs", "observation_space", "action_space", "state_space", "is_finite_horizon", "wait_for_textures", "ui_window_class_type", "rerender_on_reset", "xr", "num_rerenders_on_reset", "log_dir"}
@@ -56,5 +56,6 @@ for k in AGENT_ALGO:
 for k in ("num_steps_per_env",):
     if k in agent:
         out.append(f"agent.{k}={fmt(agent[k])}")
-out += list(args.agent_set)
+keys = {s.split("=", 1)[0] for s in args.agent_set}
+out = [s for s in out if s.split("=", 1)[0] not in keys] + list(args.agent_set)
 print(" ".join(out))
