@@ -94,6 +94,7 @@ class HexapodEnv(DirectRLEnv):
                 "action_rate_l2",
                 "feet_air_time",
                 "swing_clearance",
+                "tripod_rhythm",
                 "undesired_contacts",
                 "flat_orientation_l2",
                 "termination",
@@ -103,6 +104,10 @@ class HexapodEnv(DirectRLEnv):
         self._base_id, _ = self._contact_sensor.find_sensors("body")
         self._feet_ids, _ = self._contact_sensor.find_sensors(".*_tibia")
         self._tibia_body_ids = [self._robot.body_names.index(f"{l}_tibia") for l in ("lf", "lm", "lr", "rf", "rm", "rr")]
+        # contact sensor ids in the same (lf, lm, lr, rf, rm, rr) order, and that order's tripod offsets (ScriptedTripod)
+        _feet_names = [self._contact_sensor.body_names[i] for i in self._feet_ids]
+        self._feet_ids_by_leg = [self._feet_ids[_feet_names.index(f"{l}_tibia")] for l in ("lf", "lm", "lr", "rf", "rm", "rr")]
+        self._tripod_offsets = torch.tensor([0.0, math.pi, 0.0, math.pi, 0.0, math.pi], device=self.device)
         self._toe_offset = torch.tensor([0.130, 0.0, 0.0], device=self.device)  # toe tip in the tibia frame
         self._undesired_contact_body_ids, _ = self._contact_sensor.find_sensors(".*_(coxa|femur)")  # measured: a trained policy sat on its coxas (37 N) and nothing penalized it
 
@@ -349,6 +354,15 @@ class HexapodEnv(DirectRLEnv):
             swing_clear = lift.sum(dim=1) * (torch.linalg.norm(self._commands[:, :2], dim=1) > 0.1 * self.command_lin_vel_max)
         else:
             swing_clear = torch.zeros(self.num_envs, device=self.device)
+        # tripod rhythm: fraction of legs whose contact matches the clock's tripod stance/swing
+        if self.cfg.tripod_rhythm_reward_scale != 0.0:
+            leg_ph = torch.remainder((self._gait_phase[:, None] + self._tripod_offsets) / (2 * math.pi), 1.0)
+            contact = torch.linalg.norm(self._contact_sensor.data.net_forces_w.torch[:, self._feet_ids_by_leg], dim=-1) > 1.0
+            tripod = (contact == (leg_ph < 0.5)).float().mean(dim=1) * (
+                torch.linalg.norm(self._commands[:, :2], dim=1) > 0.1 * self.command_lin_vel_max
+            )
+        else:
+            tripod = torch.zeros(self.num_envs, device=self.device)
         # undesired contacts
         net_contact_forces = self._contact_sensor.data.net_forces_w_history.torch
         is_contact = (
@@ -369,6 +383,7 @@ class HexapodEnv(DirectRLEnv):
             "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
             "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
             "swing_clearance": swing_clear * self.cfg.swing_clearance_reward_scale * self.step_dt,
+            "tripod_rhythm": tripod * self.cfg.tripod_rhythm_reward_scale * self.step_dt,
             "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
             # _get_dones runs before _get_rewards, so reset_terminated already holds this step's deaths

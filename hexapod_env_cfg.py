@@ -173,6 +173,12 @@ class HexapodFlatEnvCfg(DirectRLEnvCfg):
     # A touchdown pays (swing time - threshold): below it, steps are penalized. ANYmal uses 0.5 s; for this
     # robot that left standing (0 reward) strictly better than any first short step, so it never stepped.
     feet_air_time_threshold = 0.2  # [s]
+    # Tripod rhythm (added 2026-10-28, "walk normally"; 0 = off, the behaviour before this field existed). Per step,
+    # the fraction of the six legs whose contact state (tibia contact force > 1 N) equals the gait clock's tripod
+    # schedule (ScriptedTripod convention: lf, rm, lr in stance for clock phase in [0, pi), rf, lm, rr in
+    # [pi, 2 pi)); paid only while the robot is commanded to move (same gate as the air-time reward). Needs the
+    # gait clock.
+    tripod_rhythm_reward_scale = 0.0
     undesired_contact_reward_scale = -1.0
     flat_orientation_reward_scale = -5.0
     # One-off penalty when the body hits the ground. The hexapod falls ~4% of steps under random
