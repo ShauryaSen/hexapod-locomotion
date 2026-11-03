@@ -11,10 +11,11 @@
 #      Bridge run (2026-10-27): DIAG_SEED (1), DIAG_AGENT_SET / DIAG_ENV_SET (extra Hydra overrides after the saved
 #      ones, e.g. "agent.algorithm.learning_rate=0.001 agent.algorithm.schedule=fixed"), DIAG_PIN_CMD (m/s; pins the
 #      command after every reset, deploy/bridge_patch.py), DIAG_SKIP_FROZEN=1 (reuse an earlier frozen eval), DIAG_NENVS (fine-tune envs, 512)
+#      Replay reference on another pi_0 (2026-11-03): DIAG_RUN / DIAG_CK (run folder / checkpoint), DIAG_NO_EVAL=1 (fine-tune only; <= 30-min GPU slots)
 set -u
 cd ~/src/isaaclab-learning
-RUN=2026-10-22_06-52-05_stage1v21_seed1
-CK=model_7299.pt
+RUN=${DIAG_RUN:-2026-10-22_06-52-05_stage1v21_seed1}
+CK=${DIAG_CK:-model_7299.pt}
 MOTOR=${DIAG_MOTOR:-0.6}
 ITERS=${DIAG_ITERS:-300}
 SAVE=${DIAG_SAVE:-50}
@@ -35,6 +36,7 @@ hexapod/tools/spark_run.sh logs/deploy/${NAME}_train.log -- env PYTHONPATH=/work
   --max_iterations $ITERS --resume --load_run $RUN --checkpoint $CK --run_name $NAME $OV agent.save_interval=$SAVE
 NEW=$(ls -td $HOME/src/isaaclab-learning/logs/rsl_rl/hexapod_rough_direct/*_${NAME} | head -1)
 echo "[diag] fine-tune run: $NEW"
+if [ "${DIAG_NO_EVAL:-0}" = 1 ]; then echo "[diag] done (no eval)"; exit 0; fi
 sleep 60
 # 2. evaluate the frozen pi_0 and every saved fine-tune checkpoint at the same motor strength (params from the
 #    original run, so terrain / commands are identical; jittered starts so the robots of a cell are not copies)
