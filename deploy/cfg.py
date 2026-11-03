@@ -96,6 +96,26 @@ class UpdaterCfg:
     update_critic: bool = True
     train_std: bool = True
     """Whether the Gaussian std is fine-tuned too (rsl_rl trains it). ASSUMED yes."""
+    # ---- replay (Shaurya 11-03, Q1: replay buffer, k = 1). GePPO, Queeney et al. NeurIPS 2021 (arXiv 2111.00072),
+    # with the F7 KL anchor kept. 0 = off: the on-policy path above, unchanged.
+    replay_batches: int = 0
+    """M = number of policies whose batches enter each update (the fresh one + M - 1 replayed), uniform weights.
+    GePPO Theorem 2 (sec. 7): M = B with N = B n samples needed per update; N >= 12,288 (bridge run: 12,288 keeps the
+    gain, 2,500 kills it, MEASURED) and n = steps_per_batch = 500 give B = M = 25 for the replay group (set per group
+    in tools/deploy_sweep_updater.py)."""
+    replay_clip: float = 0.0
+    """GePPO clipping parameter; 0 = from Lemma 4 with uniform weights: eps_PPO / E[i + 1] = clip_param * 2 / (M + 1)
+    (CITED, sec. 7 eq. 11; the paper's 0.1 is this rule at its M = 4 with optimized weights)."""
+    vtrace_c: float = 1.0
+    """V-trace truncation c-bar for off-policy GAE (CITED: GePPO App. C eq. 41-42, Espeholt et al. 2018 default)."""
+    replay_lr_rule: str = "tv"
+    """'tv' = GePPO Algorithm 1: after each update, actor lr / (1 + alpha) if the estimated total variation distance
+    > eps / 2, x (1 + alpha) if < beta eps / 2 (CITED); 'fixed' = no adaptation. The critic lr stays fixed at
+    learning_rate (CITED: reference code adapts the actor optimizer only)."""
+    replay_lr_alpha: float = 0.03
+    """GePPO Table 2 (CITED)."""
+    replay_lr_beta: float = 0.5
+    """GePPO Table 2 (CITED)."""
 
 
 @dataclass

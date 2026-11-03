@@ -67,6 +67,14 @@ class KLAnchoredPPO:
         # slice mode only: bootstrap value of each robot taken when its buffer filled (it then waits for its slice)
         self.boot_v = torch.zeros(self.n, device=device)
         self.has_boot = torch.zeros(self.n, dtype=torch.bool, device=device)
+        # replay (GePPO, behind a flag): per-deployment number of policies M per update; 0 = on-policy path
+        self.replay_M = torch.zeros(self.ns, dtype=torch.long, device=device)
+        self.rb: dict[str, torch.Tensor] | None = None
+        self.last_tv = torch.full((self.ns,), float("nan"), device=device)
+        self._replay_gen = torch.Generator(device=device)  # own RNG: replay updates do not shift other deployments' minibatch order
+        self._replay_gen.manual_seed(0)
+        if cfg.replay_batches > 0:
+            self.set_replay(torch.ones(self.ns, dtype=torch.bool, device=device), cfg.replay_batches)
 
     # ---- per-robot views of per-slice quantities ---------------------------------------------------------------
     def env_view(self, x: torch.Tensor) -> torch.Tensor:
@@ -101,6 +109,34 @@ class KLAnchoredPPO:
                 self.buf[k] = torch.cat([v, pad], 0)
             self.T = steps
         self.batch_steps[mask] = steps
+
+    def set_replay(self, mask: torch.Tensor, M: int):
+        """Replay (GePPO) with M policies per update for deployments in ``mask`` (k = 1 only). Allocates a ring of the
+        last M batches per robot (obs, action, behaviour log-prob, reward, done, bootstrap obs). The critic's lr is
+        fixed at its current value for these deployments; their actor lr adapts by the TV rule (cfg.replay_lr_rule).
+        Call before the run."""
+        assert self.identity, "replay is implemented for k = 1"
+        assert M >= 1
+        self.replay_M[mask] = M
+        Mx = int(self.replay_M.max())
+        if self.rb is None or self.rb["obs"].shape[0] < Mx:
+            T, n = self.T, self.n
+            z = lambda *s: torch.zeros(*s, device=self.device)
+            A, O = self.actor.act_dim, self.buf["obs"].shape[-1]
+            self.rb = {"obs": z(Mx, T, n, O), "act": z(Mx, T, n, A), "logp": z(Mx, T, n), "rew": z(Mx, T, n), "done": z(Mx, T, n), "boot_obs": z(Mx, n, O),
+                       "head": torch.zeros(n, dtype=torch.long, device=self.device), "count": torch.zeros(n, dtype=torch.long, device=self.device)}
+        critic_ids = {id(p) for p in self.critic.parameters_per_slice()}
+        for j, p in enumerate(self.params):
+            if id(p) in critic_ids:
+                cur = self.opt.param_lr[j]
+                cur = torch.full_like(self.opt.lr, float("nan")) if cur is None else cur
+                self.opt.param_lr[j] = torch.where(mask, self.opt.lr, cur)
+
+    def replay_eps(self) -> torch.Tensor:
+        """Per deployment GePPO clip: cfg.replay_clip, or Lemma 4 with uniform weights: clip_param * 2 / (M + 1)."""
+        if self.cfg.replay_clip > 0:
+            return torch.full((self.ns,), float(self.cfg.replay_clip), device=self.device)
+        return self.cfg.clip_param * 2.0 / (self.replay_M.float() + 1.0)
 
     # ---- acting ---------------------------------------------------------------------------------------------
     @torch.no_grad()
@@ -162,8 +198,13 @@ class KLAnchoredPPO:
         if not bool(full.any()):
             return full
         todo = full & self.update_enabled
+        rp = todo & (self.replay_M > 0)
+        todo = todo & ~rp
         for T_i in torch.unique(self.batch_steps[todo]).tolist():
             self._update(todo & (self.batch_steps == T_i), next_obs, int(T_i))
+        if bool(rp.any()):
+            self._push_replay(rp, next_obs)
+            self._update_replay(rp)
         self.ptr[full] = 0
         done = full & self.update_enabled
         self.n_updates[done] += 1
@@ -351,6 +392,155 @@ class KLAnchoredPPO:
         self.last_stats = stats
         self.last_kl_pi0 = torch.where(full, stats["kl_pi0"], self.last_kl_pi0)
 
+    # ---- replay (GePPO) -------------------------------------------------------------------------------------------
+    @torch.no_grad()
+    def _push_replay(self, mask: torch.Tensor, next_obs: torch.Tensor):
+        """Copy the just-filled on-policy batch of ``mask`` robots into their ring slot."""
+        T = self.T
+        assert bool((self.batch_steps[mask] == T).all()), "replay needs batch_steps == buffer length"
+        idx = self._ar[mask]
+        h = self.rb["head"][idx]
+        for k in ("obs", "act", "logp", "rew", "done"):
+            self.rb[k][h, :, idx] = self.buf[k][:T, idx].transpose(0, 1)
+        self.rb["boot_obs"][h, idx] = next_obs[idx]
+        M = self.replay_M[idx]
+        self.rb["head"][idx] = (h + 1) % M
+        self.rb["count"][idx] = torch.minimum(self.rb["count"][idx] + 1, M)
+
+    @torch.no_grad()
+    def _replay_targets(self, mask: torch.Tensor):
+        """V-trace GAE (GePPO App. C eq. 41-42, reference code ``gae_vtrace``) under the current policy and critic, for
+        every stored batch: A_t = delta_t + gamma lam (1 - d_t) c_{t+1} A_{t+1}, target = c_t A_t + V_t, with
+        c_t = min(c_bar, pi_k(a_t | s_t) / pi_behaviour(a_t | s_t)). Batches are separate segments (bootstrap from
+        the stored next obs). Returns flattened (n, Mx*T) tensors and the valid-sample weight."""
+        cfg = self.cfg
+        Mx, T, n = self.rb["obs"].shape[:3]
+        O = self.rb["obs"].shape[-1]
+        obs = self.rb["obs"].permute(2, 0, 1, 3).reshape(n, Mx * T, O)
+        act = self.rb["act"].permute(2, 0, 1, 3).reshape(n, Mx * T, -1)
+        logp_b = self.rb["logp"].permute(2, 0, 1).reshape(n, Mx * T)
+        mean, std = self.actor(obs)
+        logp_k = self.actor.log_prob(mean, std, act)
+        ratio_k = torch.exp(logp_k - logp_b)  # pi_k / pi_behaviour: 1 for the fresh batch
+        c = ratio_k.clamp_max(cfg.vtrace_c).reshape(n, Mx, T)
+        V = self.critic(obs).reshape(n, Mx, T)
+        Vb = self.critic(self.rb["boot_obs"].permute(1, 0, 2))  # (n, Mx)
+        rew = self.rb["rew"].permute(2, 0, 1)
+        nonterm = 1.0 - self.rb["done"].permute(2, 0, 1)
+        Vn = torch.cat([V[:, :, 1:], Vb.unsqueeze(-1)], dim=-1)
+        delta = rew + cfg.gamma * nonterm * Vn - V
+        adv = torch.zeros_like(delta)
+        a = torch.zeros(n, Mx, device=self.device)
+        for t in reversed(range(T)):
+            c_next = c[:, :, t + 1] if t + 1 < T else torch.zeros_like(a)
+            a = delta[:, :, t] + cfg.gamma * cfg.lam * nonterm[:, :, t] * c_next * a
+            adv[:, :, t] = a
+        ret = c * adv + V
+        valid = (torch.arange(Mx, device=self.device).view(1, Mx) < self.rb["count"].view(n, 1)).float()  # ring slots 0..count-1 are filled
+        w = valid.unsqueeze(-1).expand(n, Mx, T).reshape(n, Mx * T) * mask.float().view(n, 1)
+        return obs, act, logp_b, ratio_k, adv.reshape(n, Mx * T), ret.reshape(n, Mx * T), w
+
+    def _update_replay(self, mask: torch.Tensor):
+        """GePPO update (eq. 10) on the last M batches of each ``mask`` deployment, plus the F7 terms (value loss,
+        entropy, KL anchor to pi_0). Advantages centred / scaled as the reference code does: mean = E[r0 w A] / E[r0 w],
+        std = std(r0 w A), r0 = pi_k / pi_behaviour (here over the deployment's whole replay batch, not per minibatch,
+        ASSUMED). The value loss is unclipped against the V-trace targets (stored values are stale, ASSUMED)."""
+        cfg = self.cfg
+        obs, act, logp_b, r0, adv, ret, w = self._replay_targets(mask)
+        n, S = w.shape
+        wsum = w.sum(1).clamp_min(1.0)
+        mu = (r0 * w * adv).sum(1) / (r0 * w).sum(1).clamp_min(1e-8)
+        x = r0 * w * adv
+        xm = (x * w).sum(1) / wsum
+        sd = (((x - xm.unsqueeze(1)) ** 2 * w).sum(1) / wsum).sqrt()
+        adv = (adv - mu.unsqueeze(1)) / (sd.unsqueeze(1) + 1e-8)
+        eps = self.replay_eps().unsqueeze(1)
+        with torch.no_grad():
+            pi0_mean, pi0_std = self.pi0(obs.reshape(n * S, -1).unsqueeze(0))
+            pi0_mean = pi0_mean.reshape(n, S, -1)
+            pi0_std = pi0_std.reshape(n, S, -1)
+        stats = {k: torch.zeros(self.n, device=self.device) for k in ("surrogate", "value_loss", "entropy", "kl_pi0", "kl_old", "grad_norm")}
+        mb = S // cfg.num_mini_batches
+        n_mb = 0
+        for _ in range(cfg.num_learning_epochs):
+            perm = torch.randperm(S, device=self.device, generator=self._replay_gen)
+            for c in range(cfg.num_mini_batches):
+                ix = perm[c * mb:(c + 1) * mb if c < cfg.num_mini_batches - 1 else S]
+                wb = w[:, ix]
+                wn = wb.sum(1).clamp_min(1.0)
+                mean, std = self.actor(obs[:, ix])
+                logp = self.actor.log_prob(mean, std, act[:, ix])
+                ratio = torch.exp(logp - logp_b[:, ix])
+                rc = torch.maximum(torch.minimum(ratio, r0[:, ix] + eps), r0[:, ix] - eps)
+                surr = -(torch.min(ratio * adv[:, ix], rc * adv[:, ix]) * wb).sum(1) / wn
+                value = self.critic(obs[:, ix])
+                v_loss = (((value - ret[:, ix]) ** 2) * wb).sum(1) / wn
+                ent = (self.actor.entropy(std) * wb).sum(1) / wn
+                kl0 = (self.actor.kl(mean, std, pi0_mean[:, ix], pi0_std[:, ix]) * wb).sum(1) / wn
+                loss_per = surr + cfg.value_loss_coef * v_loss - cfg.entropy_coef * ent + self.kl_w * kl0
+                loss = (loss_per * mask.float()).sum()
+                self.opt.zero_grad()
+                loss.backward()
+                gn = self.opt.clip_grad_norm(cfg.max_grad_norm, mask)
+                self.opt.step(mask)
+                with torch.no_grad():
+                    stats["surrogate"] += surr.detach()
+                    stats["value_loss"] += v_loss.detach()
+                    stats["entropy"] += ent.detach()
+                    stats["kl_pi0"] += kl0.detach()
+                    stats["grad_norm"] += gn
+                n_mb += 1
+        for k in stats:
+            stats[k] /= n_mb
+        with torch.no_grad():
+            # GePPO Lemma 3 estimate: TV = 1/2 E[|pi / pi_behaviour - pi_k / pi_behaviour|] over the replay batch
+            mean, std = self.actor(obs)
+            ratio = torch.exp(self.actor.log_prob(mean, std, act) - logp_b)
+            tv = 0.5 * ((ratio - r0).abs() * w).sum(1) / wsum
+            stats["kl_old"] = tv
+            self.last_tv = torch.where(mask, tv, self.last_tv)
+            if cfg.replay_lr_rule == "tv":
+                e = eps.squeeze(1)
+                up = mask & (tv > e / 2.0)
+                down = mask & (tv < cfg.replay_lr_beta * e / 2.0)
+                self.opt.lr = torch.where(up, self.opt.lr / (1.0 + cfg.replay_lr_alpha), self.opt.lr)
+                self.opt.lr = torch.where(down, self.opt.lr * (1.0 + cfg.replay_lr_alpha), self.opt.lr)
+        self.last_stats = stats
+        self.last_kl_pi0 = torch.where(mask, stats["kl_pi0"], self.last_kl_pi0)
+
+    # ---- save / resume (wall-time-limited jobs chained into one deployment, 2026-11-03) ----------------------------
+    _STATE_KEYS = ("ptr", "n_updates", "last_kl_pi0", "last_tv", "kl_w", "explore_enabled", "update_enabled", "batch_steps", "replay_M", "boot_v", "has_boot")
+
+    def state_dict(self) -> dict:
+        """Everything needed to continue the same deployments in a new process: networks, Adam (moments, step, lr,
+        per-parameter lr / masks), the on-policy buffer, the replay ring and the per-deployment knobs."""
+        cpu = lambda x: None if x is None else x.detach().cpu().clone()
+        return {"actor": {k: cpu(v) for k, v in self.actor.state_dict().items()}, "critic": {k: cpu(v) for k, v in self.critic.state_dict().items()},
+                "opt": {"m": [cpu(x) for x in self.opt.m], "v": [cpu(x) for x in self.opt.v], "t": cpu(self.opt.t), "lr": cpu(self.opt.lr),
+                        "param_lr": [cpu(x) for x in self.opt.param_lr], "param_mask": [cpu(x) for x in self.opt.param_mask]},
+                "buf": {k: cpu(v) for k, v in self.buf.items()}, "T": self.T, "rb": None if self.rb is None else {k: cpu(v) for k, v in self.rb.items()},
+                "replay_gen": self._replay_gen.get_state(), **{k: cpu(getattr(self, k)) for k in self._STATE_KEYS}}
+
+    @torch.no_grad()
+    def load_state_dict(self, sd: dict):
+        dev = self.device
+        to = lambda x: None if x is None else x.to(dev)
+        self.actor.load_state_dict({k: to(v) for k, v in sd["actor"].items()})
+        self.critic.load_state_dict({k: to(v) for k, v in sd["critic"].items()})
+        o = sd["opt"]
+        for dst, src in zip(self.opt.m + self.opt.v, o["m"] + o["v"]):
+            dst.copy_(src.to(dev))
+        self.opt.t = to(o["t"])
+        self.opt.lr = to(o["lr"])
+        self.opt.param_lr = [to(x) for x in o["param_lr"]]
+        self.opt.param_mask = [to(x) for x in o["param_mask"]]
+        self.T = sd["T"]
+        self.buf = {k: to(v) for k, v in sd["buf"].items()}
+        self.rb = None if sd["rb"] is None else {k: to(v) for k, v in sd["rb"].items()}
+        self._replay_gen.set_state(sd["replay_gen"])
+        for k in self._STATE_KEYS:
+            setattr(self, k, to(sd[k]))
+
     # ---- resets ----------------------------------------------------------------------------------------------
     @torch.no_grad()
     def reset_to_pi0(self, mask: torch.Tensor, pi0_critic: dict | None = None):
@@ -367,9 +557,15 @@ class KLAnchoredPPO:
         self.ptr[env_m] = 0
         self.has_boot[env_m] = False
         self.last_kl_pi0[idx] = float("nan")
+        if self.rb is not None:
+            self.rb["count"][env_m] = 0
+            self.rb["head"][env_m] = 0
 
     @torch.no_grad()
     def drop_buffer(self, mask: torch.Tensor):
-        """``mask`` over robots."""
+        """``mask`` over robots. Also empties the replay ring (no replay across an adaptation boundary, ASSUMED)."""
         self.ptr[mask] = 0
         self.has_boot[mask] = False
+        if self.rb is not None:
+            self.rb["count"][mask] = 0
+            self.rb["head"][mask] = 0

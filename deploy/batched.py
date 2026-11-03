@@ -213,6 +213,10 @@ class BatchedAdam:
         self.param_mask: list[torch.Tensor | None] = [None] * len(params)
         """Per parameter: (n,) bool of slices allowed to update it (None = all). Option 3a sets the hidden layers of the
         actor to False for its slices. With no mask set every code path is the unmasked one."""
+        self.param_lr: list[torch.Tensor | None] = [None] * len(params)
+        """Per parameter: (n,) learning rate overriding ``lr`` where not NaN (None = ``lr`` everywhere). Replay mode fixes
+        the critic's lr of its deployments while their actor lr adapts (GePPO); with none set every code path is the
+        default one."""
 
     def zero_grad(self):
         for p in self.params:
@@ -244,7 +248,7 @@ class BatchedAdam:
         self.t += maskf
         bc1 = 1 - self.b1 ** self.t.clamp_min(1)
         bc2 = 1 - self.b2 ** self.t.clamp_min(1)
-        for p, m, v, pm in zip(self.params, self.m, self.v, self.param_mask):
+        for p, m, v, pm, plr in zip(self.params, self.m, self.v, self.param_mask, self.param_lr):
             if p.grad is None:
                 continue
             g = p.grad
@@ -254,7 +258,8 @@ class BatchedAdam:
             v.mul_(1 - mk * (1 - self.b2)).add_(mk * (1 - self.b2) * g * g)
             m_hat = m / bc1.view(shp)
             v_hat = v / bc2.view(shp)
-            p.add_(-(self.lr.view(shp) * mk) * m_hat / (v_hat.sqrt() + self.eps))
+            lr = self.lr if plr is None else torch.where(torch.isnan(plr), self.lr, plr)
+            p.add_(-(lr.view(shp) * mk) * m_hat / (v_hat.sqrt() + self.eps))
 
     @torch.no_grad()
     def reset_slices(self, idx: torch.Tensor):

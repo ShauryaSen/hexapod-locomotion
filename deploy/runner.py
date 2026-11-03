@@ -51,7 +51,8 @@ class DeploymentRunner:
 
 
     def run(self, minutes: float, progress_every_min: float = 1.0, on_minute=None) -> dict:
-        """``on_minute(t_s)`` is called at every whole robot-minute (e.g. to save policy snapshots)."""
+        """``on_minute(t_s)`` is called at every whole robot-minute (e.g. to save policy snapshots); if it returns True the
+        run stops there (wall-time-limited jobs). The summary's ``minutes`` is the robot time actually run."""
         env, cfg, upd, arm = self.env, self.cfg, self.updater, self.arm
         n, dev, dt = self.n, self.dev, self.dt
         total_steps = int(round(minutes * 60.0 / dt))
@@ -124,13 +125,16 @@ class DeploymentRunner:
                 total_falls += acc["falls"]
                 acc = self._new_acc()
             if on_minute is not None and (step + 1) % int(round(60.0 / dt)) == 0:
-                on_minute((step + 1) * dt)
+                if on_minute((step + 1) * dt) is True:
+                    total_steps = step + 1
+                    break
             if t + dt >= next_print - 1e-9:
                 el = time.time() - t_wall
                 self.log(f"[deploy] {next_print / 60:.0f} min robot time, {el / 60:.1f} min wall ({(step + 1) / el:.1f} steps/s); progress mean {total_prog.mean():.2f} m, falls {int(total_falls.sum())}, adapting {int(adapt.sum())}/{n}, updates {int(upd.n_updates.sum())}")
                 next_print += progress_every_min * 60.0
         wall = time.time() - t_wall
-        return {"minutes": minutes, "steps": total_steps, "wall_s": wall, "steps_per_s": total_steps / wall, "progress_mean_m": total_prog.mean().item(), "progress_per_env_m": total_prog.tolist(), "falls_total": int(total_falls.sum().item()), "falls_per_env": total_falls.tolist(), "updates_per_env": upd.env_view(upd.n_updates).tolist(), "events": self.events}
+        self.last_obs = obs
+        return {"minutes": total_steps * dt / 60.0, "steps": total_steps, "wall_s": wall, "steps_per_s": total_steps / wall, "progress_mean_m": total_prog.mean().item(), "progress_per_env_m": total_prog.tolist(), "falls_total": int(total_falls.sum().item()), "falls_per_env": total_falls.tolist(), "updates_per_env": upd.env_view(upd.n_updates).tolist(), "events": self.events}
 
     def _peek(self, obs):
         """Policy input for a next-obs value function without advancing the history buffer."""
