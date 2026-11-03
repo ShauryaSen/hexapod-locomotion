@@ -15,6 +15,13 @@ encoder output (the actor is what acts on z_hat).
 The env is the teacher's training env: every top-level scalar of the teacher run's params/env.yaml plus
 terrain.max_init_terrain_level, with DR and the terrain curriculum on, as in training.
 
+Deployment critic (supervisor 11-03, ASSUMED): fitted alongside phi so that no deployment arm sees the true z. It is
+warm-started from the teacher critic (input [obs, z]) and fed phi's z_hat (detached) in place of the critic's own
+z = mu_c(e); it is regressed (plain MSE, 4 minibatches, Adam at the run's PPO lr) on GAE(lambda) returns of the same
+student rollouts, built with its own values (gamma, lambda from the teacher run's agent.yaml; time-outs bootstrapped
+as rsl-rl does). Logged per iteration: value loss of the deployment critic and of the teacher critic (true e, its
+own encoder), each against returns built from its own values on the same rollout, and their gap.
+
 Writes <out_dir>/model_<it>.pt every --save_every iterations and at the end (student format: hexapod.rma
 student_checkpoint), and <out_dir>/distill_log.jsonl (per iteration: mse, z variance, R^2 = 1 - mse / var).
 
@@ -23,6 +30,7 @@ student_checkpoint), and <out_dir>/distill_log.jsonl (per iteration: mse, z vari
 """
 
 import argparse
+import copy
 import json
 import os
 import time
@@ -38,6 +46,7 @@ parser.add_argument("--iterations", type=int, default=1000)
 parser.add_argument("--steps", type=int, default=24, help="env steps per iteration")
 parser.add_argument("--minibatches", type=int, default=4)
 parser.add_argument("--lr", type=float, default=5e-4)
+parser.add_argument("--critic_lr", type=float, default=None, help="default: the teacher run's PPO learning rate")
 parser.add_argument("--history_len", type=int, default=50)
 parser.add_argument("--save_every", type=int, default=100)
 parser.add_argument("--seed", type=int, default=2)
@@ -73,8 +82,30 @@ dev, n = env.device, env.num_envs
 ck = torch.load(args.teacher, map_location=dev, weights_only=False)
 teacher = CheckpointPolicy(ck["actor_state_dict"]).to(dev).eval()
 assert teacher.is_teacher, "--teacher must be an RMA teacher checkpoint"
-for p in teacher.parameters():
+t_critic = CheckpointPolicy(ck["critic_state_dict"]).to(dev).eval()  # value = mlp([obs, mu_c(e)])
+for p in list(teacher.parameters()) + list(t_critic.parameters()):
     p.requires_grad_(False)
+critic = copy.deepcopy(t_critic.mlp).train()  # deployment critic: same weights, input [obs, z_hat]
+for p in critic.parameters():
+    p.requires_grad_(True)
+agent = yaml.load(open(os.path.join(run_dir, "params", "agent.yaml")), Loader=yaml.UnsafeLoader)
+gamma, lam = float(agent["algorithm"]["gamma"]), float(agent["algorithm"]["lam"])
+critic_lr = args.critic_lr or float(agent["algorithm"]["learning_rate"])
+copt = torch.optim.Adam(critic.parameters(), lr=critic_lr)
+print(f"[distill] critic: gamma {gamma}, lambda {lam}, lr {critic_lr}", flush=True)
+
+
+def gae_returns(v, v_last, r, d):
+    """(T, n) values, (n,) bootstrap, rewards, terminal flags -> GAE(lambda) returns."""
+    ret = torch.zeros_like(r)
+    adv = torch.zeros_like(v_last)
+    for t in reversed(range(r.shape[0])):
+        nv = v_last if t == r.shape[0] - 1 else v[t + 1]
+        nd = 1.0 - d[t]
+        delta = r[t] + gamma * nv * nd - v[t]
+        adv = delta + gamma * lam * nd * adv
+        ret[t] = adv + v[t]
+    return ret
 
 obs_d, _ = env.reset()
 obs = obs_d["policy"]
@@ -90,7 +121,10 @@ print(f"[distill] {n} envs, {args.steps} steps/it, history {args.history_len}, z
 
 def save(it: int, rec: dict):
     out = student_checkpoint(ck, HistoryEncoder(phi.obs_dim, phi.z_dim, phi.history_len).to(dev), {
-        "teacher": os.path.abspath(args.teacher), "distill_iter": it, "distill_last": rec})
+        "teacher": os.path.abspath(args.teacher), "distill_iter": it, "distill_last": rec,
+        "critic": "deployment critic: teacher critic warm start, input [obs, z_hat], fitted on student returns"})
+    out["critic_state_dict"] = {**out["critic_state_dict"],
+                                **{f"mlp.{k}": v.detach().cpu().clone() for k, v in critic.state_dict().items()}}
     out["rma_student"]["encoder"].load_state_dict({k: v.cpu() for k, v in phi.state_dict().items()})
     out["rma_student"]["encoder_state_dict"] = {k: v.detach().cpu().clone() for k, v in phi.state_dict().items()}
     torch.save(out, os.path.join(args.out_dir, f"model_{it}.pt"))
@@ -98,22 +132,44 @@ def save(it: int, rec: dict):
 
 t0 = time.time()
 for it in range(1, args.iterations + 1):
-    H, Z = [], []
+    H, Z, O, ZH, ZC, R, DN = [], [], [], [], [], [], []
     falls = 0
     phi.eval()
     for _ in range(args.steps):
         hist = torch.cat([hist[:, 1:], obs.unsqueeze(1)], dim=1)
         with torch.no_grad():
             z = teacher.z(obs_d["privileged"])
-            act = teacher.mlp(torch.cat([obs, phi(hist)], dim=-1))
+            zh = phi(hist)
+            act = teacher.mlp(torch.cat([obs, zh], dim=-1))
+            zc = t_critic.z(obs_d["privileged"])
         H.append(hist)
         Z.append(z)
-        obs_d, _, term, trunc, _ = env.step(act)
+        O.append(obs)
+        ZH.append(zh)
+        ZC.append(zc)
+        obs_d, rew, term, trunc, _ = env.step(act)
+        with torch.no_grad():  # time-outs: bootstrap with the value of the last state (rsl-rl convention)
+            v_to = critic(torch.cat([O[-1], zh], dim=-1)).squeeze(-1)
+        R.append(rew + gamma * v_to * trunc.float())
+        DN.append((term | trunc).float())
         obs = obs_d["policy"]
         done = term | trunc
         falls += int(term.sum().item())
         hist = hist.clone()
         hist[done] = 0.0
+    # critic targets on this rollout (deployment critic: [obs, z_hat]; teacher critic: [obs, mu_c(e)])
+    T = len(O)
+    Ot, ZHt, ZCt, Rt, Dt = torch.stack(O), torch.stack(ZH), torch.stack(ZC), torch.stack(R), torch.stack(DN)
+    with torch.no_grad():
+        h_last = torch.cat([hist[:, 1:], obs.unsqueeze(1)], dim=1)
+        vd = critic(torch.cat([Ot, ZHt], dim=-1)).squeeze(-1)
+        vd_last = critic(torch.cat([obs, phi(h_last)], dim=-1)).squeeze(-1)
+        vt = t_critic.mlp(torch.cat([Ot, ZCt], dim=-1)).squeeze(-1)
+        vt_last = t_critic.mlp(torch.cat([obs, t_critic.z(obs_d["privileged"])], dim=-1)).squeeze(-1)
+        ret_d = gae_returns(vd, vd_last, Rt, Dt)
+        ret_t = gae_returns(vt, vt_last, Rt, Dt)
+        vloss_t = (vt - ret_t).pow(2).mean().item()
+    Xc, Yc = torch.cat([Ot, ZHt], dim=-1).reshape(T * n, -1), ret_d.reshape(-1)
     H = torch.cat(H)
     Z = torch.cat(Z)
     phi.train()
@@ -125,10 +181,19 @@ for it in range(1, args.iterations + 1):
         loss.backward()
         opt.step()
         loss_sum += loss.item()
+    vloss_sum = 0.0
+    for mb in torch.randperm(Xc.shape[0], device=dev).chunk(args.minibatches):
+        vloss = (critic(Xc[mb]).squeeze(-1) - Yc[mb]).pow(2).mean()
+        copt.zero_grad()
+        vloss.backward()
+        copt.step()
+        vloss_sum += vloss.item()
+    vloss_d = vloss_sum / args.minibatches
     with torch.no_grad():
         var = Z.var(0).mean().item()
     mse = loss_sum / args.minibatches
     rec = {"it": it, "mse": round(mse, 6), "z_var": round(var, 6), "r2": round(1 - mse / max(var, 1e-12), 4),
+           "vloss_deploy": round(vloss_d, 6), "vloss_teacher": round(vloss_t, 6), "vloss_gap": round(vloss_d - vloss_t, 6),
            "falls": falls, "terrain_level": round(float(env._terrain.terrain_levels.float().mean()), 3)
            if getattr(env, "_terrain", None) is not None and hasattr(env._terrain, "terrain_levels") else None,
            "t_s": round(time.time() - t0, 1)}

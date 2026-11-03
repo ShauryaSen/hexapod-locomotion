@@ -205,7 +205,8 @@ def load_policy(path: str, device, env=None) -> nn.Module:
 def student_checkpoint(teacher_ck: dict, encoder: HistoryEncoder, extra: dict | None = None) -> dict:
     """Teacher checkpoint -> student checkpoint in deploy/batched.py's R1 format: actor and critic state dicts
     without the teacher's encoders (inputs stay [obs, z]), plus ck["rma_student"] = {"encoder", "history_len"}.
-    phi regresses the actor's z, so a critic fed phi's output sees the actor's z space, not its own (open, flagged)."""
+    phi regresses the actor's z; the teacher critic's z space differs, so tools/rma_distill.py replaces the critic
+    with a deployment critic fitted on [obs, z_hat]."""
     out = dict(teacher_ck)
     for key in ("actor_state_dict", "critic_state_dict"):
         out[key] = {k: v for k, v in teacher_ck[key].items() if not (k.startswith("encoder.") or k.startswith("priv_"))}
