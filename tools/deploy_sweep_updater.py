@@ -23,7 +23,7 @@ process cost no extra wall time.
 
 Replay groups (GePPO, Shaurya 11-03): ``name:1e-3:1:1:replay=25``. Long runs as chained wall-time-limited jobs
 (GPU slots <= 30 min): every job uses --t_on 0 (the change is on from the start), --budget_min = the adaptation
-minutes still to go, --wall_limit_min, --save_state; the next job adds --resume <state> --adapt_offset_min <done>
+minutes still to go, --wall_limit_min, --save_state; the next job adds --resume <state> --adapt_offset_cycles <done>
 (from <state>.json) and a new --env_seed. The robots restart from a reset at their cells (the harness repositions
 every 15 s anyway); the open trajectories are marked as time-outs before saving.
 """
@@ -55,8 +55,8 @@ parser.add_argument("--env_seed", type=int, default=0)
 # chained wall-time-limited jobs (GPU slots <= 30 min, 2026-11-03): one deployment run split over several processes
 parser.add_argument("--resume", default=None, help="updater state (.pt) saved by a previous job of the same run (same groups / per_group / checkpoint)")
 parser.add_argument("--save_state", default=None, help="save the updater state here at the end (after marking the open trajectories as time-outs)")
-parser.add_argument("--adapt_offset_min", type=float, default=0.0, help="adaptation minutes done by earlier jobs: snapshot names and robot-hours count from here")
-parser.add_argument("--wall_limit_min", type=float, default=0.0, help="stop at the first whole robot-minute after this much wall time in the loop (0 = no limit)")
+parser.add_argument("--adapt_offset_cycles", type=int, default=0, help="adaptation gait cycles done by earlier jobs (from <state>.json): snapshot minutes and robot-hours count from here")
+parser.add_argument("--wall_limit_min", type=float, default=0.0, help="stop at the first gait-cycle end after this much wall time in the loop (0 = no limit)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -144,13 +144,13 @@ for i, g in enumerate(groups):
         updater.set_replay(m, g["replay"])  # after the lr: the critic keeps this group's lr, the actor's adapts
 if args.resume:
     updater.load_state_dict(torch.load(args.resume, map_location=dev, weights_only=False))
-    print(f"[sweep] resumed updater state from {args.resume} (adaptation minutes done: {args.adapt_offset_min:g})", flush=True)
+    print(f"[sweep] resumed updater state from {args.resume} (adaptation cycles done: {args.adapt_offset_cycles})", flush=True)
 sched = Schedule(seed=-1, length_s=args.minutes * 60.0, events=[ChangeEvent(args.t_on, args.factor, True)], cfg={"manual": True, "value": args.value})
 schedules = [sched] * N
 arm = make_arm("oracle", NS, C.ArmCfg(name="oracle", budget_min=args.budget_min), ucfg, detcfg, dev, dcfg.gait_cycle_s, [sched] * NS)
 applier = ScheduleApplier(env, schedules, scfg)
 runner = DeploymentRunner(env, dcfg, updater, arm, applier, None, pi0_critic=info["critic"], preproc=preproc)
-meta = {"resume": args.resume, "adapt_offset_min": args.adapt_offset_min, "env_seed": args.env_seed, "checkpoint": args.checkpoint, "factor": args.factor, "value": args.value, "groups": groups, "per_group": R, "group_of_env": gid.tolist(), "replicate_of_env": rep.tolist(), "slice_of_env": sid.tolist(), "group_of_slice": gid_s.tolist(), "replicate_of_slice": rep_s.tolist(), "slice_mode": slice_mode, "snapshot_adapt_min": args.snapshot_adapt_min, "t_on": args.t_on, "budget_min": args.budget_min, "minutes": args.minutes, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg), "env_applied": applied,
+meta = {"resume": args.resume, "adapt_offset_cycles": args.adapt_offset_cycles, "env_seed": args.env_seed, "checkpoint": args.checkpoint, "factor": args.factor, "value": args.value, "groups": groups, "per_group": R, "group_of_env": gid.tolist(), "replicate_of_env": rep.tolist(), "slice_of_env": sid.tolist(), "group_of_slice": gid_s.tolist(), "replicate_of_slice": rep_s.tolist(), "slice_mode": slice_mode, "snapshot_adapt_min": args.snapshot_adapt_min, "t_on": args.t_on, "budget_min": args.budget_min, "minutes": args.minutes, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg), "env_applied": applied,
         "levels_per_env": env._terrain.terrain_levels.tolist() if env._has_terrain_levels else None, "types_per_env": env._terrain.terrain_types.tolist() if env._has_terrain_levels else None}
 json.dump(meta, open(os.path.join(out_dir, "meta.json"), "w"), indent=1, default=str)
 snap_dir = os.path.join(out_dir, "snapshots")
@@ -160,30 +160,34 @@ want = {int(round(m)) for m in args.snapshot_adapt_min}
 import time  # noqa: E402
 
 t_loop0 = time.time()
+CPM = int(round(60.0 / dcfg.gait_cycle_s))  # gait cycles per minute
 
 
-def on_minute(t_s):
+def on_cycle(t_s):
+    """Snapshots at whole adaptation minutes (counted over all jobs of the run, in gait cycles) and the wall stop."""
     stop = args.wall_limit_min > 0 and (time.time() - t_loop0) / 60.0 >= args.wall_limit_min
-    m = int(round((t_s - args.t_on) / 60.0 + args.adapt_offset_min))
-    if abs((t_s - args.t_on) / 60.0 + args.adapt_offset_min - m) < 1e-6 and m in want:
+    cyc_total = args.adapt_offset_cycles + int(round((t_s - args.t_on) / dcfg.gait_cycle_s))
+    m = cyc_total // CPM
+    if cyc_total % CPM == 0 and m in want and t_s >= args.t_on:
         os.makedirs(snap_dir, exist_ok=True)
         torch.save({"adapt_min": m, "t_s": t_s, "actor": {k: v.detach().cpu().clone() for k, v in actor.state_dict().items()}, "group_of_slice": gid_s.tolist(), "replicate_of_slice": rep_s.tolist(), "groups": groups,
                     "robot_hours_of_slice": [groups[int(g)]["k"] * m / 60.0 for g in gid_s.tolist()]}, os.path.join(snap_dir, f"adapt_{m:03d}.pt"))
         print(f"[sweep] snapshot at {m} adapt-min", flush=True)
     if stop:
-        print(f"[sweep] wall limit {args.wall_limit_min:g} min reached at {t_s / 60:.0f} robot-min", flush=True)
+        print(f"[sweep] wall limit {args.wall_limit_min:g} min reached at {t_s / 60:.2f} robot-min", flush=True)
     return stop
 
 
-if int(round(args.adapt_offset_min)) in want and args.t_on % 60 == 0 and not os.path.exists(os.path.join(snap_dir, f"adapt_{int(round(args.adapt_offset_min)):03d}.pt")):
-    on_minute(args.t_on)
-summary = runner.run(args.minutes, on_minute=on_minute if (want or args.wall_limit_min > 0) else None)
+if args.adapt_offset_cycles % CPM == 0 and args.t_on % 60 == 0 and not os.path.exists(os.path.join(snap_dir, f"adapt_{args.adapt_offset_cycles // CPM:03d}.pt")):
+    on_cycle(args.t_on)
+summary = runner.run(args.minutes, on_cycle=on_cycle if (want or args.wall_limit_min > 0) else None)
 if args.save_state:
     updater.truncate(torch.ones(N, dtype=torch.bool, device=dev), runner._peek(runner.last_obs))  # the next job starts from a fresh reset
     torch.save(updater.state_dict(), args.save_state + ".tmp")
     os.replace(args.save_state + ".tmp", args.save_state)
-    json.dump({"adapt_min_done": args.adapt_offset_min + (summary["minutes"] * 60.0 - args.t_on) / 60.0, "robot_min_this_job": summary["minutes"], "updates_per_env": summary["updates_per_env"]}, open(args.save_state + ".json", "w"), indent=1)
-    print(f"[sweep] saved updater state to {args.save_state} (adaptation minutes done {args.adapt_offset_min + (summary['minutes'] * 60.0 - args.t_on) / 60.0:g})", flush=True)
+    done_cyc = args.adapt_offset_cycles + int(round((summary["minutes"] * 60.0 - args.t_on) / dcfg.gait_cycle_s))
+    json.dump({"adapt_cycles_done": done_cyc, "adapt_min_done": done_cyc / CPM, "robot_min_this_job": summary["minutes"], "wall_s": summary["wall_s"], "steps_per_s": summary["steps_per_s"], "updates_per_env": summary["updates_per_env"]}, open(args.save_state + ".json", "w"), indent=1)
+    print(f"[sweep] saved updater state to {args.save_state} (adaptation cycles done {done_cyc} = {done_cyc / CPM:.2f} min)", flush=True)
 runner.stream.save(out_dir, meta)
 json.dump(summary, open(os.path.join(out_dir, "summary.json"), "w"), indent=1)
 

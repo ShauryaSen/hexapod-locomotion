@@ -50,9 +50,10 @@ class DeploymentRunner:
             self.baseliner = Baseliner(self.n, nb, sd_g, mu_g, self.dev)
 
 
-    def run(self, minutes: float, progress_every_min: float = 1.0, on_minute=None) -> dict:
+    def run(self, minutes: float, progress_every_min: float = 1.0, on_minute=None, on_cycle=None) -> dict:
         """``on_minute(t_s)`` is called at every whole robot-minute (e.g. to save policy snapshots); if it returns True the
-        run stops there (wall-time-limited jobs). The summary's ``minutes`` is the robot time actually run."""
+        run stops there. ``on_cycle(t_s)`` is called at the end of every gait cycle, likewise (finer stop points for
+        wall-time-limited jobs). The summary's ``minutes`` is the robot time actually run."""
         env, cfg, upd, arm = self.env, self.cfg, self.updater, self.arm
         n, dev, dt = self.n, self.dev, self.dt
         total_steps = int(round(minutes * 60.0 / dt))
@@ -124,6 +125,9 @@ class DeploymentRunner:
                 total_prog += acc["prog"]
                 total_falls += acc["falls"]
                 acc = self._new_acc()
+                if on_cycle is not None and on_cycle(t_end) is True:
+                    total_steps = step + 1
+                    break
             if on_minute is not None and (step + 1) % int(round(60.0 / dt)) == 0:
                 if on_minute((step + 1) * dt) is True:
                     total_steps = step + 1
