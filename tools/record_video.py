@@ -42,7 +42,6 @@ app = AppLauncher(args).app
 
 import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
-import torch.nn as nn  # noqa: E402
 import yaml  # noqa: E402
 
 import hexapod  # noqa: F401, E402
@@ -118,19 +117,10 @@ env = gym.wrappers.RecordVideo(env, video_folder=args.out, step_trigger=lambda s
 dev = raw.device
 N = raw.num_envs
 
-ck = torch.load(args.checkpoint, map_location=dev, weights_only=False)
-sd = ck["actor_state_dict"] if "actor_state_dict" in ck else ck
-layers = sorted({int(k.split(".")[1]) for k in sd if k.startswith("mlp.")})
-mods = []
-for i, li in enumerate(layers):
-    w = sd[f"mlp.{li}.weight"]
-    lin = nn.Linear(w.shape[1], w.shape[0])
-    lin.weight.data.copy_(w)
-    lin.bias.data.copy_(sd[f"mlp.{li}.bias"])
-    mods.append(lin)
-    if i < len(layers) - 1:
-        mods.append(nn.ELU())
-actor = nn.Sequential(*mods).to(dev).eval()
+from hexapod.rma import load_policy  # noqa: E402
+
+# plain stage-1 actor (obs["policy"]) or RMA teacher (also obs["privileged"] through its encoder)
+actor = load_policy(args.checkpoint, dev)
 
 ids = torch.arange(N, device=dev)
 if raw._has_terrain_levels and args.spread:
@@ -156,7 +146,7 @@ elif raw._has_terrain_levels and args.levels:
         raw._terrain.env_origins[:, 2] += 0.06
 obs, _ = env.reset()
 raw._commands[:, 0], raw._commands[:, 1], raw._commands[:, 2] = 0.0, -args.cmd, 0.0
-obs = raw._get_observations()["policy"]
+obs = raw._get_observations()
 falls = 0
 speed_sum, speed_n = 0.0, 0
 cam = getattr(raw, "viewport_camera_controller", None)
@@ -186,8 +176,7 @@ for _ in range(args.steps):
     with torch.no_grad():
         act = actor(obs)
     follow_env0()
-    obs_d, _, terminated, _, _ = env.step(act)
-    obs = obs_d["policy"]
+    obs, _, terminated, _, _ = env.step(act)
     falls += int(terminated.sum().item())
     speed_sum += (-raw._robot.data.root_lin_vel_b.torch[:, 1]).mean().item()
     speed_n += 1
