@@ -214,10 +214,10 @@ def swing_clearance(toe_log: torch.Tensor, done_step: torch.Tensor, window_steps
 
 
 def load_actor(path: str) -> nn.Module:
-    # plain stage-1 actor (obs["policy"]) or RMA teacher (also obs["privileged"] through its encoder)
+    # plain stage-1 actor (obs["policy"]), RMA teacher (also obs["privileged"] through its encoder) or student (history)
     from hexapod.rma import load_policy
 
-    return load_policy(path, dev)
+    return load_policy(path, dev, env)
 
 
 def _jitter_starts(n: int):

@@ -119,8 +119,8 @@ N = raw.num_envs
 
 from hexapod.rma import load_policy  # noqa: E402
 
-# plain stage-1 actor (obs["policy"]) or RMA teacher (also obs["privileged"] through its encoder)
-actor = load_policy(args.checkpoint, dev)
+# plain stage-1 actor (obs["policy"]), RMA teacher (also obs["privileged"] through its encoder) or student (history)
+actor = load_policy(args.checkpoint, dev, raw)
 
 ids = torch.arange(N, device=dev)
 if raw._has_terrain_levels and args.spread:

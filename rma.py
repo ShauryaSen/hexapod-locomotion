@@ -130,10 +130,99 @@ class CheckpointPolicy(nn.Module):
         return self.mlp(x)
 
 
-def load_policy(path: str, device) -> CheckpointPolicy:
+class HistoryEncoder(nn.Module):
+    """Stage 3 adaptation module phi: (B, H, obs) -> (B, z_dim). RMA (arXiv 2107.04034, Sec. III-B and IV-B, verified
+    11-03): a 2-layer MLP embeds each step to 32, then a 1-D CNN with 32 channels, kernel/stride (8, 4), (5, 1),
+    (5, 1), flattened and projected linearly to z. RMA's history is the last 50 (state, action) pairs; our policy
+    observation already contains the previous action, so the history is the last H observations (the format of
+    deploy/batched.py's HistoryEncoderPreproc). Activation ELU (ASSUMED, ours; the paper's is not stated there)."""
+
+    def __init__(self, obs_dim: int, z_dim: int = 8, history_len: int = 50, embed: int = 32):
+        super().__init__()
+        self.obs_dim, self.z_dim, self.history_len = obs_dim, z_dim, history_len
+        self.embed = nn.Sequential(nn.Linear(obs_dim, embed), nn.ELU(), nn.Linear(embed, embed), nn.ELU())
+        self.conv = nn.Sequential(
+            nn.Conv1d(embed, embed, 8, stride=4), nn.ELU(),
+            nn.Conv1d(embed, embed, 5, stride=1), nn.ELU(),
+            nn.Conv1d(embed, embed, 5, stride=1), nn.ELU(),
+        )
+        with torch.no_grad():
+            n_flat = self.conv(torch.zeros(1, embed, history_len)).numel()
+        self.head = nn.Linear(n_flat, z_dim)
+
+    def forward(self, hist: torch.Tensor) -> torch.Tensor:
+        x = self.embed(hist).transpose(1, 2)  # (B, embed, H)
+        return self.head(self.conv(x).flatten(1))
+
+
+class StudentPolicy(nn.Module):
+    """Deterministic RMA student: actor MLP on [obs["policy"], phi(last H policy observations)].
+
+    Keeps the rolling history itself. Bound to an env (`bind`), it zeroes a row's history when that env's episode
+    restarted, detected as episode_length_buf not advancing by exactly one since the previous call (covers
+    env.reset(), _reset_idx and spread resets); the new observation is then appended, as HistoryEncoderPreproc does.
+    """
+
+    def __init__(self, ck: dict):
+        super().__init__()
+        st = ck["rma_student"]
+        self.mlp = _mlp_from_sd(ck["actor_state_dict"], "mlp")
+        self.encoder = st["encoder"]
+        self.H = int(st["history_len"])
+        self.is_teacher = False
+        self.hist = None
+        self._env = None
+        self._prev = None
+
+    def bind(self, env):
+        self._env = env
+        return self
+
+    def forward(self, obs) -> torch.Tensor:
+        x = obs["policy"] if not isinstance(obs, torch.Tensor) else obs
+        if self.hist is None or self.hist.shape[0] != x.shape[0]:
+            self.hist = torch.zeros(x.shape[0], self.H, x.shape[1], device=x.device)
+        if self._env is not None:
+            elb = self._env.episode_length_buf
+            if self._prev is not None:
+                self.hist[elb != self._prev + 1] = 0.0
+            self._prev = elb.clone()
+        self.hist = torch.cat([self.hist[:, 1:], x.unsqueeze(1)], dim=1)
+        return self.mlp(torch.cat([x, self.encoder(self.hist)], dim=-1))
+
+
+def load_policy(path: str, device, env=None) -> nn.Module:
+    """Plain, teacher or student policy from a checkpoint. A student needs `env` (the unwrapped env) to see resets."""
     ck = torch.load(path, map_location=device, weights_only=False)
+    if isinstance(ck, dict) and "rma_student" in ck:
+        if env is None:
+            print("[rma] warning: student policy without an env: its history is never reset")
+        return StudentPolicy(ck).to(device).eval().bind(env)
     sd = ck["actor_state_dict"] if "actor_state_dict" in ck else ck
     return CheckpointPolicy(sd).to(device).eval()
+
+
+def student_checkpoint(teacher_ck: dict, encoder: HistoryEncoder, extra: dict | None = None) -> dict:
+    """Teacher checkpoint -> student checkpoint in deploy/batched.py's R1 format: actor and critic state dicts
+    without the teacher's encoders (inputs stay [obs, z]), plus ck["rma_student"] = {"encoder", "history_len"}.
+    phi regresses the actor's z, so a critic fed phi's output sees the actor's z space, not its own (open, flagged)."""
+    out = dict(teacher_ck)
+    for key in ("actor_state_dict", "critic_state_dict"):
+        out[key] = {k: v for k, v in teacher_ck[key].items() if not (k.startswith("encoder.") or k.startswith("priv_"))}
+    out.pop("optimizer_state_dict", None)
+    enc = encoder.to("cpu").eval()
+    for p in enc.parameters():
+        p.requires_grad_(False)
+    out["rma_student"] = {
+        "encoder": enc,
+        "encoder_state_dict": {k: v.clone() for k, v in enc.state_dict().items()},
+        "history_len": enc.history_len,
+        "obs_dim": enc.obs_dim,
+        "z_dim": enc.z_dim,
+        "z_target": "actor encoder",
+        **(extra or {}),
+    }
+    return out
 
 
 def pad_stage1_checkpoint(

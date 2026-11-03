@@ -123,7 +123,7 @@ print(f"[gait] {len(cells)} cells x {args.robots} robots, settings {applied}", f
 
 from hexapod.rma import load_policy  # noqa: E402
 
-actor = load_policy(args.checkpoint, dev)
+actor = load_policy(args.checkpoint, dev, env)
 
 # leg order of the contact sensor vs LEGS
 sensor_names = [env._contact_sensor.body_names[i] for i in env._feet_ids]

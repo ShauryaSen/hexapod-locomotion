@@ -83,8 +83,8 @@ print("[long_run] env settings:", applied)
 
 from hexapod.rma import load_policy  # noqa: E402
 
-# plain stage-1 actor (obs["policy"]) or RMA teacher (also obs["privileged"] through its encoder)
-actor = load_policy(args.checkpoint, dev)
+# plain stage-1 actor (obs["policy"]), RMA teacher (also obs["privileged"] through its encoder) or student (history)
+actor = load_policy(args.checkpoint, dev, env)
 print(f"[long_run] policy: {'RMA teacher' if actor.is_teacher else 'plain MLP'}")
 
 ids = torch.arange(N, device=dev)
