@@ -71,6 +71,12 @@ class KLAnchoredPPO:
         self.replay_M = torch.zeros(self.ns, dtype=torch.long, device=device)
         self.rb: dict[str, torch.Tensor] | None = None
         self.last_tv = torch.full((self.ns,), float("nan"), device=device)
+        # TV after every replay update (kill rule "TV > 10 eps for 10 updates in a row", supervisor 11-06): history
+        # in update order per deployment (first TV_HIST updates) and the current run of updates above 10 eps
+        self.TV_HIST = 1024
+        self.tv_hist = torch.full((self.ns, self.TV_HIST), float("nan"), device=device)
+        self.tv_count = torch.zeros(self.ns, dtype=torch.long, device=device)
+        self.tv_streak = torch.zeros(self.ns, dtype=torch.long, device=device)
         self._replay_gen = torch.Generator(device=device)  # own RNG: replay updates do not shift other deployments' minibatch order
         self._replay_gen.manual_seed(0)
         if cfg.replay_batches > 0:
@@ -499,6 +505,12 @@ class KLAnchoredPPO:
             tv = 0.5 * ((ratio - r0).abs() * w).sum(1) / wsum
             stats["kl_old"] = tv
             self.last_tv = torch.where(mask, tv, self.last_tv)
+            idx = self._ars[mask]
+            pos = self.tv_count[idx].clamp_max(self.TV_HIST - 1)
+            self.tv_hist[idx, pos] = torch.where(self.tv_count[idx] < self.TV_HIST, tv[idx], self.tv_hist[idx, pos])
+            self.tv_count[idx] += 1
+            above = tv > 10.0 * eps.squeeze(1)
+            self.tv_streak = torch.where(mask, torch.where(above, self.tv_streak + 1, torch.zeros_like(self.tv_streak)), self.tv_streak)
             if cfg.replay_lr_rule == "tv":
                 e = eps.squeeze(1)
                 up = mask & (tv > e / 2.0)
@@ -509,7 +521,7 @@ class KLAnchoredPPO:
         self.last_kl_pi0 = torch.where(mask, stats["kl_pi0"], self.last_kl_pi0)
 
     # ---- save / resume (wall-time-limited jobs chained into one deployment, 2026-11-03) ----------------------------
-    _STATE_KEYS = ("ptr", "n_updates", "last_kl_pi0", "last_tv", "kl_w", "explore_enabled", "update_enabled", "batch_steps", "replay_M", "boot_v", "has_boot")
+    _STATE_KEYS = ("ptr", "n_updates", "last_kl_pi0", "last_tv", "kl_w", "explore_enabled", "update_enabled", "batch_steps", "replay_M", "boot_v", "has_boot", "tv_hist", "tv_count", "tv_streak")
 
     def state_dict(self) -> dict:
         """Everything needed to continue the same deployments in a new process: networks, Adam (moments, step, lr,

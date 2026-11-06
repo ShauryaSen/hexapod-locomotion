@@ -272,5 +272,33 @@ for k, (seed, ns) in enumerate(((9, 20), (10, 21), (11, 22))):
 same8 = all(torch.equal(flat_slice(cont8, s), flat_slice(job, s)) for s in range(N)) and torch.equal(cont8.opt.lr, job.opt.lr) and all(torch.equal(cont8.rb[k], job.rb[k]) for k in cont8.rb) and torch.equal(cont8.n_updates, job.n_updates)
 print(f"[8] three jobs chained through state files (map_location={dev}) vs continuous: {same8}, updates {job.n_updates.tolist()}")
 ok &= same8
+
+# ---- 9. TV history and the above-10-eps streak (kill rule, supervisor 11-06) -----------------------------------------
+cnt = job.tv_count
+last_ok = all(torch.equal(job.tv_hist[i, cnt[i] - 1], job.last_tv[i]) for i in range(N) if rp[i])
+cnt_ok = torch.equal(cnt[rp], job.n_updates[rp]) and bool((cnt[~rp] == 0).all())
+e9 = job.replay_eps()
+streak_ref = []
+for i in range(N):
+    k = 0
+    for x in job.tv_hist[i, : cnt[i]].tolist():
+        k = k + 1 if x > 10 * e9[i].item() else 0
+    streak_ref.append(k)
+streak_ok = job.tv_streak.tolist() == streak_ref
+a9, c9 = make_nets(N, 12)
+u9 = KLAnchoredPPO(a9, c9, a9.slice_state(0), C.UpdaterCfg(steps_per_batch=60, learning_rate=3e-4, kl_anchor_weight=0.5, replay_clip=0.002), dev, OBS)
+u9.set_replay(rp, 4)  # tiny clip: TV is above 10 eps, so the streak counts up
+torch.manual_seed(13)
+drive(u9, N, 300, 23)
+e9b = u9.replay_eps()
+ref9 = []
+for i in range(N):
+    k = 0
+    for x in u9.tv_hist[i, : u9.tv_count[i]].tolist():
+        k = k + 1 if x > 10 * e9b[i].item() else 0
+    ref9.append(k)
+streak_ok &= u9.tv_streak.tolist() == ref9 and max(ref9) > 0
+print(f"[9] TV history: last entry = last_tv {last_ok}, count = replay updates {cnt_ok} ({cnt.tolist()}), streak {job.tv_streak.tolist()}, tiny-clip streak {u9.tv_streak.tolist()} (TV {[round(x, 3) for x in u9.last_tv.tolist()]}, 10 eps {10 * e9b[0].item():.3f}) = recount {streak_ok}")
+ok &= last_ok and cnt_ok and streak_ok
 print("replay checks passed" if ok else "REPLAY CHECKS FAILED")
 sys.exit(0 if ok else 1)
