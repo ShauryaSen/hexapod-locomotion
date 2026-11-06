@@ -22,6 +22,13 @@ robot is still up (a robot that falls stops counting at the fall):
   * reach_m: forward-most toe position in the body frame (forward = -y), mean over gait-period windows;
     stride_m: fore-aft toe range per window; swing_h_m: toe height range in the body frame per window.
 
+Drift per robot (body frame: forward = -y, left = +x), over the whole episode while the robot is up: the command the
+policy acted on (forward speed, yaw rate), mean body-frame vx / vy (also as forward / lateral speed and the crab
+angle atan2(lateral, forward)), mean yaw rate, heading change (unwrapped), displacement along and to the left of the
+initial heading and along world x, and the lf - rf clock-match and duty differences, with their correlation over
+robots against lateral speed, yaw rate, heading change and lateral displacement. Per cell: mean, std, min, max and
+the per-robot values.
+
 Outputs next to the checkpoint: eval/<ckpt>_gait_<tag>.json and .md.
 
   PYTHONPATH=/workspace/learning ./isaaclab.sh -p /workspace/learning/hexapod/tools/gait_metrics.py --headless \
@@ -155,14 +162,23 @@ settle = int(args.settle_s / env.step_dt)
 offsets = torch.tensor(OFFSETS, device=dev)
 alive = torch.ones(n, dtype=torch.bool, device=dev)
 C, PH, TOE, VALID = [], [], [], []
+DXY, DYAW, DVB, DWZ, DCMD, DVAL = [], [], [], [], [], []  # drift: every step of the episode, settle included
+fwd_b = torch.tensor([0.0, -1.0, 0.0], device=dev).expand(n, 3)  # body forward = -y
 for i in range(steps):
     with torch.no_grad():
         act = actor(obs)
+    DCMD.append(env._commands[:, [1, 2]].clone())  # the command the policy acted on this step
     obs, _, term, trunc, _ = env.step(act)
     alive &= ~(term | trunc)
     env._commands[:, 0] = 0.0
     env._commands[:, 1] = -args.cmd
     env._commands[:, 2] = 0.0
+    f_w = quat_apply(env._robot.data.root_quat_w.torch, fwd_b)
+    DXY.append(env._robot.data.root_pos_w.torch[:, :2].clone())
+    DYAW.append(torch.atan2(f_w[:, 1], f_w[:, 0]))  # world heading of the body's forward axis
+    DVB.append(env._robot.data.root_lin_vel_b.torch[:, :2].clone())
+    DWZ.append(env._robot.data.root_ang_vel_b.torch[:, 2].clone())
+    DVAL.append(alive.clone())
     if i < settle:
         continue
     f = torch.linalg.norm(env._contact_sensor.data.net_forces_w.torch[:, feet_by_leg], dim=-1)
@@ -227,6 +243,36 @@ def wmean(x):  # (nw, n, 6) -> (n, 6)
 
 reach, stride, swing_h = wmean(reach), wmean(stride), wmean(swing_h)
 
+# drift per robot (supervisor 11-06: crab walk vs heading drift vs camera). Body frame: forward = -y, left = +x.
+# Over the whole episode (settle included) while the robot is up; positions start after the first step.
+DXY, DYAW, DVB, DWZ, DCMD = torch.stack(DXY), torch.stack(DYAW), torch.stack(DVB), torch.stack(DWZ), torch.stack(DCMD)
+DV = torch.stack(DVAL).float()  # (T, n)
+dn = DV.sum(0).clamp_min(1.0)
+last = (DV.sum(0).long() - 1).clamp_min(0)  # alive is monotone, so the last valid step is count - 1
+dyaw = torch.remainder(DYAW[1:] - DYAW[:-1] + math.pi, 2 * math.pi) - math.pi
+heading_change = (dyaw * DV[1:]).sum(0)
+f0 = torch.stack([torch.cos(DYAW[0]), torch.sin(DYAW[0])], -1)  # initial heading in the world
+left0 = torch.stack([-f0[:, 1], f0[:, 0]], -1)
+disp = DXY[last, ids] - DXY[0]
+lat_b, fwd_v = (DVB[..., 0] * DV).sum(0) / dn, (-DVB[..., 1] * DV).sum(0) / dn
+cm = clock_match  # (n, 6), LEGS order
+drift = {
+    "cmd_forward_mps": (-DCMD[..., 0] * DV).sum(0) / dn, "cmd_yaw_rps": (DCMD[..., 1] * DV).sum(0) / dn,
+    "vx_b_mps": (DVB[..., 0] * DV).sum(0) / dn, "vy_b_mps": (DVB[..., 1] * DV).sum(0) / dn,
+    "forward_mps": fwd_v, "lateral_left_mps": lat_b,
+    "crab_deg": torch.rad2deg(torch.atan2(lat_b, fwd_v)),
+    "yaw_rate_rps": (DWZ * DV).sum(0) / dn, "heading_change_deg": torch.rad2deg(heading_change),
+    "disp_forward0_m": (disp * f0).sum(-1), "disp_left0_m": (disp * left0).sum(-1), "disp_world_x_m": disp[:, 0],
+    "clock_lf_minus_rf": cm[:, LEGS.index("lf")] - cm[:, LEGS.index("rf")],
+    "duty_lf_minus_rf": duty[:, LEGS.index("lf")] - duty[:, LEGS.index("rf")],
+}
+
+
+def _corr(a, b):
+    a, b = a - a.mean(), b - b.mean()
+    return (a * b).sum().item() / max((a.square().sum() * b.square().sum()).sqrt().item(), 1e-12)
+
+
 metrics = {"clock_match": clock_match, "shift_match": best_leg, "rhythm": rhythm, "lag_deg": lag_deg, "duty": duty,
            "touchdowns_hz": onsets, "reach_m": reach, "stride_m": stride, "swing_h_m": swing_h}
 out_cells = []
@@ -240,6 +286,10 @@ for ci, (lvl, t, col) in enumerate(cells):
             row[k] = {l: math.degrees(torch.angle(zz[:, j].mean()).item()) for j, l in enumerate(LEGS)}
         else:
             row[k] = {l: v[sel, j].mean().item() for j, l in enumerate(LEGS)}
+    row["drift"] = {k: {"mean": v[sel].mean().item(), "std": v[sel].std().item(), "min": v[sel].min().item(),
+                        "max": v[sel].max().item(), "per_robot": v[sel].tolist()} for k, v in drift.items()}
+    row["drift_corr"] = {f"clock_lf_minus_rf~{k}": _corr(drift["clock_lf_minus_rf"][sel], drift[k][sel])
+                         for k in ("lateral_left_mps", "yaw_rate_rps", "heading_change_deg", "disp_left0_m")}
     out_cells.append(row)
 
 
@@ -264,6 +314,13 @@ md += ["", "## per leg", "", "| cell | metric | " + " | ".join(LEGS) + " |", "|-
 for r in out_cells:
     for k in metrics:
         md.append(f"| L{r['level']} {r['type']} | {k} | " + " | ".join(f"{r[k][l]:.3f}" if k != "lag_deg" else f"{r[k][l]:+.0f}" for l in LEGS) + " |")
+md += ["", "## drift per robot (body frame: forward = -y, left = +x; whole episode while up)", "",
+       "| cell | metric | mean | std | min | max |", "|---|---|---|---|---|---|"]
+for r in out_cells:
+    for k, d in r["drift"].items():
+        md.append(f"| L{r['level']} {r['type']} | {k} | {d['mean']:+.4f} | {d['std']:.4f} | {d['min']:+.4f} | {d['max']:+.4f} |")
+    for k, c in r["drift_corr"].items():
+        md.append(f"| L{r['level']} {r['type']} | corr {k} | {c:+.2f} | | | |")
 text = "\n".join(md)
 print(text, flush=True)
 out_dir = os.path.join(os.path.dirname(args.checkpoint), "eval")
