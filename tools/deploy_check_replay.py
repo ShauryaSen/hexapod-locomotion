@@ -250,5 +250,27 @@ same_o = all(torch.equal(x, y) for x, y in zip(cont.opt.m + cont.opt.v, second.o
 same_rb = all(torch.equal(cont.rb[k], second.rb[k]) for k in cont.rb)
 print(f"[7] save mid-batch + resume in a new updater vs continuous: params {same_r}, Adam + lr {same_o}, replay ring {same_rb}, updates {second.n_updates.tolist()} vs {cont.n_updates.tolist()}")
 ok &= same_r and same_o and same_rb and torch.equal(cont.n_updates, second.n_updates)
+
+# ---- 8. two chained jobs through files, as deploy_sweep_updater.py does (torch.save, then torch.load with
+# map_location = the job's device; the 11-04 job_01 crash was the CUDA-mapped replay RNG state) -------------------------
+import os, tempfile
+
+cont8 = fresh(8)
+for seed, ns in ((9, 20), (10, 21), (11, 22)):
+    torch.manual_seed(seed)
+    drive(cont8, N, 250, ns)
+path = os.path.join(tempfile.mkdtemp(), "state.pt")
+job = fresh(8)
+for k, (seed, ns) in enumerate(((9, 20), (10, 21), (11, 22))):
+    if k > 0:
+        job = fresh(100 + k)
+        job.load_state_dict(torch.load(path, map_location=dev, weights_only=False))
+    torch.manual_seed(seed)
+    drive(job, N, 250, ns)
+    torch.save(job.state_dict(), path + ".tmp")
+    os.replace(path + ".tmp", path)
+same8 = all(torch.equal(flat_slice(cont8, s), flat_slice(job, s)) for s in range(N)) and torch.equal(cont8.opt.lr, job.opt.lr) and all(torch.equal(cont8.rb[k], job.rb[k]) for k in cont8.rb) and torch.equal(cont8.n_updates, job.n_updates)
+print(f"[8] three jobs chained through state files (map_location={dev}) vs continuous: {same8}, updates {job.n_updates.tolist()}")
+ok &= same8
 print("replay checks passed" if ok else "REPLAY CHECKS FAILED")
 sys.exit(0 if ok else 1)

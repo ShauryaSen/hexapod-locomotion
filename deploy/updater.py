@@ -537,7 +537,8 @@ class KLAnchoredPPO:
         self.T = sd["T"]
         self.buf = {k: to(v) for k, v in sd["buf"].items()}
         self.rb = None if sd["rb"] is None else {k: to(v) for k, v in sd["rb"].items()}
-        self._replay_gen.set_state(sd["replay_gen"])
+        # get_state() is a CPU uint8 tensor; torch.load(map_location=cuda) moves it, and set_state rejects that
+        self._replay_gen.set_state(sd["replay_gen"].cpu().to(torch.uint8))
         for k in self._STATE_KEYS:
             setattr(self, k, to(sd[k]))
 
