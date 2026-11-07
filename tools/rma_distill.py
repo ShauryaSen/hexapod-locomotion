@@ -20,7 +20,8 @@ warm-started from the teacher critic (input [obs, z]) and fed phi's z_hat (detac
 z = mu_c(e); it is regressed (plain MSE, 4 minibatches, Adam at the run's PPO lr) on GAE(lambda) returns of the same
 student rollouts, built with its own values (gamma, lambda from the teacher run's agent.yaml; time-outs bootstrapped
 as rsl-rl does). Logged per iteration: value loss of the deployment critic and of the teacher critic (true e, its
-own encoder), each against returns built from its own values on the same rollout, and their gap.
+own encoder), each against returns built from its own values on the same rollout and before this iteration's critic
+update, and their gap; vloss_deploy_fit is the deployment critic's mean minibatch loss during the update.
 
 Writes <out_dir>/model_<it>.pt every --save_every iterations and at the end (student format: hexapod.rma
 student_checkpoint), and <out_dir>/distill_log.jsonl (per iteration: mse, z variance, R^2 = 1 - mse / var).
@@ -169,6 +170,7 @@ for it in range(1, args.iterations + 1):
         ret_d = gae_returns(vd, vd_last, Rt, Dt)
         ret_t = gae_returns(vt, vt_last, Rt, Dt)
         vloss_t = (vt - ret_t).pow(2).mean().item()
+        vloss_d_pre = (vd - ret_d).pow(2).mean().item()  # same footing as vloss_t: before this iteration's fit
     Xc, Yc = torch.cat([Ot, ZHt], dim=-1).reshape(T * n, -1), ret_d.reshape(-1)
     H = torch.cat(H)
     Z = torch.cat(Z)
@@ -193,7 +195,8 @@ for it in range(1, args.iterations + 1):
         var = Z.var(0).mean().item()
     mse = loss_sum / args.minibatches
     rec = {"it": it, "mse": round(mse, 6), "z_var": round(var, 6), "r2": round(1 - mse / max(var, 1e-12), 4),
-           "vloss_deploy": round(vloss_d, 6), "vloss_teacher": round(vloss_t, 6), "vloss_gap": round(vloss_d - vloss_t, 6),
+           "vloss_deploy": round(vloss_d_pre, 6), "vloss_teacher": round(vloss_t, 6),
+           "vloss_gap": round(vloss_d_pre - vloss_t, 6), "vloss_deploy_fit": round(vloss_d, 6),
            "falls": falls, "terrain_level": round(float(env._terrain.terrain_levels.float().mean()), 3)
            if getattr(env, "_terrain", None) is not None and hasattr(env._terrain, "terrain_levels") else None,
            "t_s": round(time.time() - t0, 1)}
