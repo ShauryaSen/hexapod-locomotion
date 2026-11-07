@@ -41,7 +41,7 @@ parser.add_argument("--run_dir", default=None)
 parser.add_argument("--task", default="Hexapod-Rough-Direct-v0")
 parser.add_argument("--factor", default="motor", choices=["payload", "motor", "friction"])
 parser.add_argument("--value", type=float, required=True)
-parser.add_argument("--groups", nargs="+", required=True, help="name:lr:kl_weight:explore(0/1)[:std_scale[:batch_steps]][:key=val...] (std_scale multiplies pi_0's action std at the start of the fine-tune; batch_steps = this group's PPO batch length per robot; keys: k = robots per deployment (option 2, default 1), subset = all | last_layer (option 3a), replay = M policies per update (GePPO, k = 1; default 0 = on-policy))")
+parser.add_argument("--groups", nargs="+", required=True, help="name:lr:kl_weight:explore(0/1)[:std_scale[:batch_steps]][:key=val...] (std_scale multiplies pi_0's action std at the start of the fine-tune; batch_steps = this group's PPO batch length per robot; keys: k = robots per deployment (option 2, default 1), subset = all | last_layer (option 3a), replay = M policies per update (GePPO, k = 1; default 0 = on-policy), actor_lr = the replay actor's starting lr (critic keeps lr))")
 parser.add_argument("--snapshot_adapt_min", type=float, nargs="*", default=[], help="save every deployment's actor at these adaptation minutes (whole robot-minutes after t_on) to <out>/snapshots/ for tools/deploy_eval_policies.py")
 parser.add_argument("--per_group", type=int, default=12)
 parser.add_argument("--t_on", type=float, default=60.0)
@@ -82,7 +82,7 @@ for g in args.groups:
     kw = dict(x.split("=", 1) for x in parts[4:] if "=" in x)
     std_scale = float(pos[0]) if len(pos) > 0 else 1.0
     batch = int(pos[1]) if len(pos) > 1 else None
-    groups.append({"name": name, "lr": float(lr), "kl_weight": float(kl), "explore": bool(int(ex)), "std_scale": std_scale, "batch_steps": batch, "k": int(kw.get("k", 1)), "subset": kw.get("subset", "all"), "replay": int(kw.get("replay", 0))})
+    groups.append({"name": name, "lr": float(lr), "kl_weight": float(kl), "explore": bool(int(ex)), "std_scale": std_scale, "batch_steps": batch, "k": int(kw.get("k", 1)), "subset": kw.get("subset", "all"), "replay": int(kw.get("replay", 0)), "actor_lr": float(kw["actor_lr"]) if "actor_lr" in kw else None})
 G, R = len(groups), args.per_group
 NS = G * R  # deployments (policy slices): slice s = replicate s // G, group s % G
 KMAX = max(g["k"] for g in groups)
@@ -142,6 +142,12 @@ for i, g in enumerate(groups):
         updater.set_batch_steps(m, g["batch_steps"])
     if g["replay"] > 0:
         updater.set_replay(m, g["replay"])  # after the lr: the critic keeps this group's lr, the actor's adapts
+        if g["actor_lr"] is not None:  # replay pilot (Shaurya 11-07): actor starts here, critic stays at the group lr
+            updater.opt.lr[m] = g["actor_lr"]
+for gi, g in enumerate(groups):
+    sl = gid_s == gi  # opt.lr and param_lr are per deployment (slice)
+    crit = [x[sl].median().item() for x in updater.opt.param_lr if x is not None and torch.isfinite(x[sl]).any()]
+    print(f"[sweep] group {g['name']}: actor lr {updater.opt.lr[sl].median().item():.2e}, fixed critic lr {crit[0] if crit else float('nan'):.2e}", flush=True)
 if args.resume:
     updater.load_state_dict(torch.load(args.resume, map_location=dev, weights_only=False))
     print(f"[sweep] resumed updater state from {args.resume} (adaptation cycles done: {args.adapt_offset_cycles})", flush=True)
