@@ -321,6 +321,10 @@ def build_preproc(info: dict, n: int, env_obs_dim: int, device):
     rma = info.get("rma_student")
     if rma is None:
         return None
+    if "obs_dim" in rma and int(rma["obs_dim"]) != int(env_obs_dim):
+        # 11-08: a student whose run dir had no params/env.yaml got the cfg defaults (66-dim obs, phi wants 68)
+        raise ValueError(f"RMA student history encoder expects {rma['obs_dim']}-dim observations, env gives {env_obs_dim}: "
+                         "load the env cfg of its training run (--run_dir with params/env.yaml, e.g. the frozen pi_0 dir)")
     return HistoryEncoderPreproc(rma["encoder"], int(rma["history_len"]), n, env_obs_dim, device)
 
 
