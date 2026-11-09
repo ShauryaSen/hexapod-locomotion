@@ -299,7 +299,12 @@ class HistoryEncoderPreproc:
 def load_rsl_rl_checkpoint(path: str, device) -> dict:
     """``{'actor': sd, 'critic': sd, 'hidden_dims': [...], 'obs_dim': int, 'act_dim': int, 'rma_student': dict|None}``
     from a model_*.pt. ``obs_dim`` is the base policy's input (obs + z for an RMA student)."""
+    from .frozen import verify_listed
+
+    verified = verify_listed(path)  # raises on a hash mismatch in a frozen dir (supervisor 11-08)
     ck = torch.load(path, map_location=device, weights_only=False)
+    if isinstance(ck, dict) and "rma_student" in ck and not verified:
+        raise RuntimeError(f"{path}: RMA student pi_0 outside a frozen dir with SHA256SUMS; load it from logs/frozen/pi0_rma_2026-11-08/ (supervisor 11-08)")
     actor = ck["actor_state_dict"] if "actor_state_dict" in ck else ck
     critic = ck.get("critic_state_dict")
     rma = ck.get("rma_student")
@@ -316,15 +321,25 @@ def load_rsl_rl_checkpoint(path: str, device) -> dict:
     }
 
 
+def check_obs_dim(info: dict, env_obs_dim: int):
+    """The env's observation size must be the policy's input (plain) or the history encoder's input with obs + z the
+    policy's input (RMA student). Supervisor 11-08: a cfg fallback that happens to give a matching size is excluded
+    by the params/env.yaml requirement; this catches the rest."""
+    rma = info.get("rma_student")
+    z = int(rma["z_dim"]) if rma is not None else 0
+    if int(info["obs_dim"]) != int(env_obs_dim) + z or (rma is not None and int(rma.get("obs_dim", env_obs_dim)) != int(env_obs_dim)):
+        raise ValueError(f"env gives {env_obs_dim}-dim observations; the policy takes {info['obs_dim']}"
+                         + (f" (= encoder obs {rma.get('obs_dim')} + z {z})" if rma is not None else "")
+                         + ": the env cfg is not pi_0's training cfg")
+
+
 def build_preproc(info: dict, n: int, env_obs_dim: int, device):
-    """R1: a HistoryEncoderPreproc for an RMA student checkpoint, else None (plain stage-1 policy)."""
+    """R1: a HistoryEncoderPreproc for an RMA student checkpoint, else None (plain stage-1 policy). Checks the env's
+    observation size against the policy first (check_obs_dim)."""
+    check_obs_dim(info, env_obs_dim)
     rma = info.get("rma_student")
     if rma is None:
         return None
-    if "obs_dim" in rma and int(rma["obs_dim"]) != int(env_obs_dim):
-        # 11-08: a student whose run dir had no params/env.yaml got the cfg defaults (66-dim obs, phi wants 68)
-        raise ValueError(f"RMA student history encoder expects {rma['obs_dim']}-dim observations, env gives {env_obs_dim}: "
-                         "load the env cfg of its training run (--run_dir with params/env.yaml, e.g. the frozen pi_0 dir)")
     return HistoryEncoderPreproc(rma["encoder"], int(rma["history_len"]), n, env_obs_dim, device)
 
 

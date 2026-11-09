@@ -47,13 +47,14 @@ import warp as wp  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from hexapod.deploy import cfg as C  # noqa: E402
-from hexapod.deploy.batched import build_from_checkpoint  # noqa: E402
+from hexapod.deploy.batched import build_from_checkpoint, check_obs_dim  # noqa: E402
 from hexapod.deploy.envutil import forward_speed, make_env, pin_commands, policy_obs, reset_in_place  # noqa: E402
 
 dcfg = C.DeployCfg(task=args.task, levels=(0,), reposition_s=15.0)
 env, applied = make_env(dcfg, args.checkpoint, args.num_envs, args.device, args.run_dir)
 dev, N, dt = env.device, env.num_envs, float(env.step_dt)
 actor, _, info = build_from_checkpoint(args.checkpoint, N, dev)
+check_obs_dim(info, env.single_observation_space["policy"].shape[-1])
 ids = torch.arange(N, device=dev)
 low = ids[: N // 2]
 if args.slide_test:

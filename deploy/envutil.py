@@ -22,26 +22,30 @@ SKIP_KEYS = {"seed", "log_dir", "episode_length_s", "num_envs"}
 
 
 def deploy_env_cfg(cfg: DeployCfg, checkpoint: str, num_envs: int, device: str, run_dir: str | None = None, dr: bool = False, episode_s: float | None = None):
-    """Env cfg for a fixed-command deployment: no time-outs, no curricula, nominal DR unless ``dr``."""
-    from isaaclab_tasks.utils import parse_env_cfg
+    """Env cfg for a fixed-command deployment: no time-outs, no curricula, nominal DR unless ``dr``. The training
+    run's params/env.yaml is required (supervisor 11-08: no silent fallback to the cfg defaults) and is checked against
+    the run dir's SHA256SUMS when there is one (frozen pi_0 dirs)."""
+    from .frozen import verify_listed
 
     run_dir = run_dir or os.path.dirname(checkpoint)
-    env_cfg = parse_env_cfg(cfg.task, device=device, num_envs=num_envs)
     params_path = os.path.join(run_dir, "params", "env.yaml")
+    if not os.path.exists(params_path):
+        raise FileNotFoundError(f"no {params_path}: the env cfg of pi_0's training run is required (pass --run_dir, or load from the frozen pi_0 dir)")
+    verify_listed(params_path)
+    from isaaclab_tasks.utils import parse_env_cfg
+
+    env_cfg = parse_env_cfg(cfg.task, device=device, num_envs=num_envs)
     applied = {}
     train_cmd_max = None
-    if os.path.exists(params_path):
-        params = yaml.load(open(params_path), Loader=yaml.UnsafeLoader)
-        for k, v in params.items():
-            if k in SKIP_KEYS or not hasattr(env_cfg, k):
-                continue
-            if isinstance(v, (bool, int, float, str)) or v is None:
-                if getattr(env_cfg, k) != v:
-                    applied[k] = v
-                setattr(env_cfg, k, v)
-        train_cmd_max = params.get("command_lin_vel_max")
-    else:
-        applied["WARNING"] = f"no {params_path}: cfg defaults used (reward may differ from training)"
+    params = yaml.load(open(params_path), Loader=yaml.UnsafeLoader)
+    for k, v in params.items():
+        if k in SKIP_KEYS or not hasattr(env_cfg, k):
+            continue
+        if isinstance(v, (bool, int, float, str)) or v is None:
+            if getattr(env_cfg, k) != v:
+                applied[k] = v
+            setattr(env_cfg, k, v)
+    train_cmd_max = params.get("command_lin_vel_max")
     for ov in cfg.env_override:
         k, v = ov.split("=", 1)
         setattr(env_cfg, k, yaml.safe_load(v))
