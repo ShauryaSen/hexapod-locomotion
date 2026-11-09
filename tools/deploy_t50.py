@@ -61,7 +61,7 @@ import torch  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from hexapod.deploy import cfg as C  # noqa: E402
 from hexapod.deploy.arms import make_arm  # noqa: E402
-from hexapod.deploy.batched import build_from_checkpoint  # noqa: E402
+from hexapod.deploy.batched import build_from_checkpoint, build_preproc  # noqa: E402
 from hexapod.deploy.ensemble import DynamicsEnsemble  # noqa: E402
 from hexapod.deploy.envutil import make_env  # noqa: E402
 from hexapod.deploy.runner import DeploymentRunner  # noqa: E402
@@ -113,7 +113,8 @@ def run_value(value: float, out_dir: str, arms):
           # the adapting arm starts at the change, like the oracle; before it, it is frozen pi_0
           arm = make_arm("oracle", N, C.ArmCfg(name="oracle", budget_min=float("inf")), ucfg, detcfg, dev, cycle_s, schedules)
       applier = ScheduleApplier(env, schedules, sc)
-      runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"])
+      preproc = build_preproc(info, N, env.single_observation_space["policy"].shape[-1], dev)  # R1: RMA student -> fresh obs history per arm; None for a plain policy
+      runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"], preproc=preproc)
       summary = runner.run(args.minutes)
       sub = os.path.join(out_dir, arm_name)
       runner.stream.save(sub, {"arm": arm_name, "checkpoint": args.checkpoint, "factor": args.factor, "value": value, "t_on": args.t_on, "env_applied": applied, "updater_cfg": C.to_dict(ucfg), "deploy_cfg": C.to_dict(dcfg),

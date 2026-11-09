@@ -42,7 +42,7 @@ import numpy as np  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from hexapod.deploy import cfg as C  # noqa: E402
 from hexapod.deploy.arms import make_arm  # noqa: E402
-from hexapod.deploy.batched import build_from_checkpoint  # noqa: E402
+from hexapod.deploy.batched import build_from_checkpoint, build_preproc  # noqa: E402
 from hexapod.deploy.ensemble import DynamicsEnsemble  # noqa: E402
 from hexapod.deploy.envutil import make_env  # noqa: E402
 from hexapod.deploy.runner import DeploymentRunner  # noqa: E402
@@ -69,7 +69,8 @@ updater = KLAnchoredPPO(actor, critic, info["actor"], ucfg, dev, info["obs_dim"]
 ensemble = DynamicsEnsemble.load(args.ensemble, dev)
 arm = make_arm(args.arm, N, C.ArmCfg(name=args.arm), ucfg, detcfg, dev, dcfg.gait_cycle_s, schedules)
 applier = ScheduleApplier(env, schedules, scfg)
-runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"])
+preproc = build_preproc(info, N, env.single_observation_space["policy"].shape[-1], dev)  # R1: RMA student history; None for a plain policy
+runner = DeploymentRunner(env, dcfg, updater, arm, applier, ensemble, pi0_critic=info["critic"], preproc=preproc)
 summary = runner.run(args.minutes)
 meta = {"checkpoint": args.checkpoint, "ensemble": args.ensemble, "num_envs": N, "factor": args.factor, "value": value, "t_on": args.t_on, "t_off": args.t_off, "arm": args.arm, "env_applied": applied, "nominal_mu": float(ensemble.nominal_mu), "nominal_sigma": float(ensemble.nominal_sigma), "deploy_cfg": C.to_dict(dcfg)}
 runner.stream.save(out_dir, meta)

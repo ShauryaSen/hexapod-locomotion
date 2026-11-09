@@ -45,7 +45,7 @@ import torch  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from hexapod.deploy import cfg as C  # noqa: E402
-from hexapod.deploy.batched import build_from_checkpoint  # noqa: E402
+from hexapod.deploy.batched import build_from_checkpoint, build_preproc  # noqa: E402
 from hexapod.deploy.ensemble import DynamicsEnsemble, train_ensemble  # noqa: E402
 from hexapod.deploy.envutil import make_env, pin_commands, policy_obs, reset_in_place  # noqa: E402
 
@@ -63,6 +63,8 @@ os.makedirs(out_dir, exist_ok=True)
 env, applied = make_env(dcfg, args.checkpoint, args.num_envs, args.device, args.run_dir, dr=True)
 dev, N, dt = env.device, env.num_envs, float(env.step_dt)
 actor, _, info = build_from_checkpoint(args.checkpoint, N, dev)
+OBS_DIM = env.single_observation_space["policy"].shape[-1]  # the ensemble models env observations (an RMA student's actor input also has z)
+preproc = build_preproc(info, N, OBS_DIM, dev)
 ids = torch.arange(N, device=dev)
 repo_steps = int(round(args.reposition_s / dt))
 steps_per_cycle = int(round(dcfg.gait_cycle_s / dt))
@@ -75,6 +77,8 @@ def rollout(n_steps: int, ensemble: DynamicsEnsemble | None = None):
     env.resample_dr(ids)
     reset_in_place(env, ids, dcfg.cmd_speed)
     obs = policy_obs(env)
+    if preproc is not None:
+        preproc.reset(torch.ones(N, dtype=torch.bool, device=dev))
     O, A, O2, V = [], [], [], []
     res_c, dis_c = [], []
     acc_r = torch.zeros(N, device=dev)
@@ -84,7 +88,7 @@ def rollout(n_steps: int, ensemble: DynamicsEnsemble | None = None):
     t0 = time.time()
     for step in range(n_steps):
         with torch.no_grad():
-            act, _ = actor(obs)
+            act, _ = actor(preproc(obs) if preproc is not None else obs)
         obs_next, rew, term, trunc, _ = env.step(act)
         obs_next = obs_next["policy"]
         fell = term.bool()
@@ -107,9 +111,13 @@ def rollout(n_steps: int, ensemble: DynamicsEnsemble | None = None):
         if bool(fell.any()):
             pin_commands(env, dcfg.cmd_speed)
             obs_next = policy_obs(env)
+            if preproc is not None:
+                preproc.reset(fell)
         if repo_steps and (step + 1) % repo_steps == 0:
             reset_in_place(env, ids, dcfg.cmd_speed)  # dr.enabled: new DR draws for every env
             obs_next = policy_obs(env)
+            if preproc is not None:
+                preproc.reset(torch.ones(N, dtype=torch.bool, device=dev))
         obs = obs_next
         if (step + 1) % 500 == 0:
             print(f"[ensemble] rollout step {step + 1}/{n_steps}, {(step + 1) / (time.time() - t0):.1f} steps/s, falls {falls}", flush=True)
@@ -122,7 +130,7 @@ def rollout(n_steps: int, ensemble: DynamicsEnsemble | None = None):
 (obs, act, obs2, valid), _, _, falls_train = rollout(args.steps)
 obs, act, obs2 = obs[valid], act[valid], obs2[valid]
 print(f"[ensemble] training set: {obs.shape[0]} transitions from {N} envs x {args.steps} steps ({falls_train} falls excluded)")
-ensemble = DynamicsEnsemble(info["obs_dim"], info["act_dim"], ecfg).to(dev)
+ensemble = DynamicsEnsemble(OBS_DIM, info["act_dim"], ecfg).to(dev)
 res = train_ensemble(ensemble, obs, act, obs2, ecfg, dev)
 ensemble.eval()
 

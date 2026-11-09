@@ -54,7 +54,7 @@ import torch  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from hexapod.deploy import cfg as C  # noqa: E402
-from hexapod.deploy.batched import BatchedGaussianActor, load_rsl_rl_checkpoint  # noqa: E402
+from hexapod.deploy.batched import BatchedGaussianActor, build_preproc, load_rsl_rl_checkpoint  # noqa: E402
 from hexapod.deploy.envutil import deploy_env_cfg  # noqa: E402
 
 torch.manual_seed(args.seed)
@@ -143,11 +143,12 @@ for b0 in range(0, len(jobs), NE):
     jitter(n)
     env.episode_length_buf[:] = 0
     obs = env._get_observations()["policy"]
+    preproc = build_preproc(info, NE, obs.shape[-1], dev)  # R1: RMA student -> fresh obs history per batch (episodes end at done)
     done = torch.zeros(NE, dtype=torch.bool, device=dev)
     out = {k: torch.zeros(NE, device=dev) for k in results}
     for i in range(int(args.episode_s / env.step_dt) + 2):
         with torch.no_grad():
-            act, _ = actor.forward_gather(obs, pidx)
+            act, _ = actor.forward_gather(preproc(obs) if preproc is not None else obs, pidx)
         o, _, term, trunc, _ = env.step(act)
         obs = o["policy"]
         fin = (term | trunc) & ~done
