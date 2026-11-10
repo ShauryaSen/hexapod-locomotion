@@ -8,7 +8,7 @@ copy; env i follows schedule seed ``schedule_seeds[i % len]`` (so N = replicates
 --no_schedule. Writes <out_dir>/{streams.npz, meta.json, schedule_env{i}.json, summary.json, final_policies.pt}.
 
   PYTHONPATH=/workspace/learning ./isaaclab.sh -p /workspace/learning/hexapod/tools/deploy_run.py --headless \
-      --checkpoint <model.pt> --arm never --num_envs 16 --minutes 2 --no_schedule --tag smoke
+      --checkpoint <model.pt> --arm never --num_envs 16 --minutes 2 --no_schedule --no_ensemble --tag smoke
 """
 
 import argparse
@@ -33,7 +33,8 @@ parser.add_argument("--budget_min", type=float, default=None, help="adaptation b
 parser.add_argument("--schedule_seeds", type=int, nargs="*", default=[0])
 parser.add_argument("--no_schedule", action="store_true")
 parser.add_argument("--t50_min", type=float, default=None, help="T50 for the schedule generator (default ScheduleCfg.t50_min)")
-parser.add_argument("--ensemble", default=None, help="dynamics ensemble .pt (tools/deploy_train_ensemble.py)")
+parser.add_argument("--ensemble", default=None, help="dynamics ensemble .pt (tools/deploy_train_ensemble.py); required unless --no_ensemble (11-10: every arm, Never included, logs the per-cycle residual so 3-sigma and CUSUM can be replayed offline)")
+parser.add_argument("--no_ensemble", action="store_true", help="run without an ensemble (no residual / z streams; smoke tests only)")
 parser.add_argument("--cusum_h", type=float, default=None, help="calibrated CUSUM threshold (tools/deploy_calibrate_cusum.py); the cusum arm's knob")
 parser.add_argument("--three_sigma_consecutive", type=int, default=None, help="the three_sigma arm's knob")
 parser.add_argument("--baseline_cycles", type=int, default=None, help="R5 per-deployment baseline length in cycles (default DetectorCfg)")
@@ -124,7 +125,11 @@ minutes = args.minutes if args.minutes is not None else (2.0 if args.no_schedule
 actor, critic, info = build_from_checkpoint(args.checkpoint, N, dev)
 preproc = build_preproc(info, N, env.single_observation_space["policy"].shape[-1], dev)  # R1: RMA student or None
 updater = KLAnchoredPPO(actor, critic, info["actor"], ucfg, dev, info["obs_dim"])
+if not args.ensemble and not args.no_ensemble:
+    raise SystemExit("--ensemble is required (per-cycle residuals for the offline 3-sigma / CUSUM replay); pass --no_ensemble only for smoke tests")
 ensemble = DynamicsEnsemble.load(args.ensemble, dev) if args.ensemble else None
+if ensemble is not None and ensemble.obs_dim != env.single_observation_space["policy"].shape[-1]:
+    raise SystemExit(f"ensemble models {ensemble.obs_dim}-dim obs, env gives {env.single_observation_space['policy'].shape[-1]}: train it on this pi_0's env")
 if args.arms:
     specs = []
     for spec in args.arms:
