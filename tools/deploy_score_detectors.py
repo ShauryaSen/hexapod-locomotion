@@ -445,7 +445,9 @@ if __name__ == "__main__":
         import torch
 
         ck = torch.load(a.ensemble, map_location="cpu", weights_only=False)
-        sigma = float(ck["calibration"]["nominal_sigma_log"]) if "calibration" in ck else float(ck["nominal_sigma_log"])
+        sigma = float(ck["state_dict"]["nominal_sigma_log"])  # DynamicsEnsemble.save: buffers live in state_dict
+        if not np.isfinite(sigma):
+            raise SystemExit(f"{a.ensemble}: nominal_sigma_log not set (run deploy_calibrate_cusum --set_calibration_from)")
     d = load_chain(a.jobs, a.cycle_s)
     res = run(d, sigma, a)
     res["jobs"] = a.jobs
