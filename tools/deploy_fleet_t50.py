@@ -69,7 +69,9 @@ for r in sorted(set(renv.tolist())):
         if t50 is None and rw >= target:
             t50 = float(t[w[-1]] - args.t_on)
     adapt_min = float((t[-1] - args.t_on) / 60.0)
-    rows.append({"replicate": r, "R0": R0, "Rf": Rf, "target": target, "T50_s": t50, "adapt_min": adapt_min, "last_window_rate": last,
+    R0, Rf, target = float(R0), float(Rf), float(target)
+    last = None if last is None else float(last)
+    rows.append({"replicate": int(r), "R0": R0, "Rf": Rf, "target": target, "T50_s": t50, "adapt_min": adapt_min, "last_window_rate": last,
                  "gap_closed_last_window": None if last is None else float((last - Rf) / (R0 - Rf)), "frozen_drop": float(1 - Rf / R0)})
 md = ["| seed (fleet) | R0 nominal | Rf frozen after | frozen drop | target (50%) | T50 | adapt-min run | gap closed, last 1-min window |", "|---|---|---|---|---|---|---|---|"]
 for x in rows:
