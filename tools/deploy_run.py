@@ -32,6 +32,10 @@ parser.add_argument("--hold_min", type=float, default=10.0)
 parser.add_argument("--budget_min", type=float, default=None, help="adaptation budget per episode [robot-min] (default UpdaterCfg.budget_min)")
 parser.add_argument("--schedule_seeds", type=int, nargs="*", default=[0])
 parser.add_argument("--no_schedule", action="store_true")
+parser.add_argument("--schedule_mode", default=None, help="poisson (E1) | episodes (path B, preregistration 6); default ScheduleCfg.mode")
+parser.add_argument("--robots_per_schedule", type=int, default=None, help="path B layout: env i follows schedule_seeds[i // R] on cell j = i %% R (column j %% n_cols, level levels[(j + j // n_cols) %% len]); every schedule gets the same R distinct cells. num_envs must be R x len(schedule_seeds); one arm only")
+parser.add_argument("--t0_s", type=float, default=0.0, help="continue chained deployments at this robot time [s] (a multiple of the gait cycle): schedule events, t_s and the reposition phase continue from there")
+parser.add_argument("--wall_min", type=float, default=None, help="stop at the first gait-cycle end after this many wall minutes of the run loop (chained jobs); meta/summary record the robot time reached")
 parser.add_argument("--t50_min", type=float, default=None, help="T50 for the schedule generator (default ScheduleCfg.t50_min)")
 parser.add_argument("--ensemble", default=None, help="dynamics ensemble .pt (tools/deploy_train_ensemble.py); required unless --no_ensemble (11-10: every arm, Never included, logs the per-cycle residual so 3-sigma and CUSUM can be replayed offline)")
 parser.add_argument("--no_ensemble", action="store_true", help="run without an ensemble (no residual / z streams; smoke tests only)")
@@ -85,6 +89,8 @@ if args.budget_min is not None:
 scfg = C.ScheduleCfg()
 if args.t50_min:
     scfg.t50_min = args.t50_min
+if args.schedule_mode:
+    scfg.mode = args.schedule_mode
 acfg = C.ArmCfg(name=args.arm, period_min=args.period_min, hold_min=args.hold_min, budget_min=args.budget_min, cusum_h=args.cusum_h, three_sigma_consecutive=args.three_sigma_consecutive)
 detcfg = C.DetectorCfg()
 if args.baseline_cycles is not None:
@@ -101,6 +107,23 @@ print("[deploy] env settings:", applied, "N", N, "step_dt", env.step_dt)
 
 A = len(args.arms) if args.arms else 1
 replicate_of_env = [i // A for i in range(N)]
+R = args.robots_per_schedule
+cell_of_env = None
+if R:
+    if A > 1 or args.no_schedule or N != R * len(args.schedule_seeds):
+        raise SystemExit(f"--robots_per_schedule {R}: needs one arm, schedules, and num_envs = {R} x {len(args.schedule_seeds)} (got {N})")
+    n_cols = env._terrain.terrain_origins.shape[1]
+    j = torch.arange(N, device=dev) % R
+    lv = torch.tensor(list(dcfg.levels), device=dev)[(j + j // n_cols) % len(dcfg.levels)]
+    env.set_terrain_cells(torch.arange(N, device=dev), lv, j % n_cols)
+    env.reset()
+    from hexapod.deploy.envutil import pin_commands
+
+    pin_commands(env, dcfg.cmd_speed)
+    replicate_of_env = (j).tolist()
+    cell_of_env = list(zip(lv.tolist(), (j % n_cols).tolist()))
+    if len(set(cell_of_env[:R])) != R:
+        raise SystemExit(f"{R} robots per schedule but only {len(set(cell_of_env[:R]))} distinct cells")
 if A > 1 and env._has_terrain_levels:
     # every arm's replicate r gets the same terrain cell (and schedule) as the other arms' replicate r
     rep = torch.tensor(replicate_of_env, device=dev)
@@ -116,11 +139,13 @@ schedules = [None] * N
 if not args.no_schedule:
     seeds = args.schedule_seeds
     uniq = {s: generate_schedule(s, scfg) for s in seeds}
-    schedules = [uniq[seeds[(i // A) % len(seeds)]] for i in range(N)]
+    schedules = [uniq[seeds[i // R]] if R else uniq[seeds[(i // A) % len(seeds)]] for i in range(N)]
     for s in uniq.values():
         s.save(os.path.join(out_dir, f"schedule_seed{s.seed}.json"))
     print("[deploy] schedules:", {s: [(round(e.t_s), e.factor, e.on) for e in sch.events] for s, sch in uniq.items()})
-minutes = args.minutes if args.minutes is not None else (2.0 if args.no_schedule else max(s.length_s for s in schedules) / 60.0)
+minutes = args.minutes if args.minutes is not None else (2.0 if args.no_schedule else max(s.length_s for s in schedules) / 60.0 - args.t0_s / 60.0)
+if minutes <= 0:
+    raise SystemExit(f"nothing left to run: t0 {args.t0_s} s")
 
 actor, critic, info = build_from_checkpoint(args.checkpoint, N, dev)
 preproc = build_preproc(info, N, env.single_observation_space["policy"].shape[-1], dev)  # R1: RMA student or None
@@ -166,14 +191,19 @@ meta = {
     "checkpoint": args.checkpoint, "task": args.task, "num_envs": N, "arm": args.arm, "arm_label": arm_label(acfg, detcfg) if not args.arms else "multi", "arm_of_env": arm_of_env, "arm_label_of_env": label_of_env, "replicate_of_env": replicate_of_env, "arms_spec": args.arms, "tag": args.tag, "minutes": minutes,
     "rma_student": info.get("rma_student") is not None, "init_state": init_readback, "schedule_split": [None if s is None else ("tune" if s.seed in scfg.tune_seeds else "test" if s.seed in scfg.test_seeds else "other") for s in schedules],
     "schedule_seeds": None if args.no_schedule else args.schedule_seeds, "env_schedule_seed": [None if s is None else s.seed for s in schedules],
-    "ensemble": args.ensemble, "cusum_h": args.cusum_h, "env_applied": applied, "step_dt": env.step_dt,
+    "ensemble": args.ensemble, "cusum_h": args.cusum_h, "t0_s": args.t0_s, "wall_min": args.wall_min, "robots_per_schedule": R, "cell_of_env": cell_of_env, "env_seed": args.env_seed, "env_applied": applied, "step_dt": env.step_dt,
     "deploy_cfg": C.to_dict(dcfg), "updater_cfg": C.to_dict(ucfg), "schedule_cfg": C.to_dict(scfg), "arm_cfg": C.to_dict(acfg), "detector_cfg": C.to_dict(detcfg),
     "levels_per_env": env._terrain.terrain_levels.tolist() if env._has_terrain_levels else None,
     "types_per_env": env._terrain.terrain_types.tolist() if env._has_terrain_levels else None,
 }
 json.dump(meta, open(os.path.join(out_dir, "meta.json"), "w"), indent=1, default=str)
 print("[deploy] out_dir", out_dir)
-summary = runner.run(minutes, args.progress_every_min)
+import time  # noqa: E402
+
+_t_start = time.time()
+_on_cycle = (lambda t: (time.time() - _t_start) > args.wall_min * 60.0) if args.wall_min else None
+summary = runner.run(minutes, args.progress_every_min, on_cycle=_on_cycle, t0_s=args.t0_s)
+summary["t0_s"], summary["t_end_s"] = args.t0_s, args.t0_s + summary["minutes"] * 60.0
 runner.stream.save(out_dir, meta)
 json.dump(summary, open(os.path.join(out_dir, "summary.json"), "w"), indent=1)
 torch.save({"actor": {k: v.detach().cpu() for k, v in actor.state_dict().items()}, "critic": {k: v.detach().cpu() for k, v in critic.state_dict().items()}}, os.path.join(out_dir, "final_policies.pt"))

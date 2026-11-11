@@ -87,8 +87,38 @@ class Schedule:
         return [e.t_s for e in self.events]
 
 
+def generate_episode_schedule(seed: int, cfg: ScheduleCfg) -> Schedule:
+    """Path B (preregistration 6): non-overlapping on/off episodes. Each test value gets ``episodes_per_factor``
+    episodes, in a seeded random order. After ``episodes_warmup_s`` of nominal time come the episodes; on-durations
+    are ~ U[episodes_on_s]; the remaining nominal time is split over the gap after each episode (the last one is the
+    tail), each >= ``episodes_min_gap_s``, by a flat Dirichlet. Fixed length ``episodes_length_s``."""
+    rng = np.random.default_rng(seed)
+    factors = [f for f in cfg.factors for _ in range(cfg.episodes_per_factor)]
+    order = [factors[i] for i in rng.permutation(len(factors))]
+    n = len(order)
+    lo, hi = cfg.episodes_on_s
+    on = rng.uniform(lo, hi, size=n)
+    free = cfg.episodes_length_s - cfg.episodes_warmup_s - on.sum() - n * cfg.episodes_min_gap_s
+    if free < 0:
+        raise ValueError(f"episodes do not fit: length {cfg.episodes_length_s} s, warm-up {cfg.episodes_warmup_s} s, on {on.sum():.0f} s, gaps >= {n} x {cfg.episodes_min_gap_s} s")
+    gaps = cfg.episodes_min_gap_s + free * rng.dirichlet(np.ones(n))
+    t, events = cfg.episodes_warmup_s, []
+    for f, d, g in zip(order, on, gaps):
+        events.append(ChangeEvent(float(t), f, True))
+        events.append(ChangeEvent(float(t + d), f, False))
+        t += d + g
+    s = Schedule(seed, float(cfg.episodes_length_s), events, cfg.__dict__.copy())
+    s.cfg["split"] = "tune" if seed in cfg.tune_seeds else "test" if seed in cfg.test_seeds else "other"  # R2
+    s.cfg.update(s.overlap_stats())
+    assert s.cfg["max_concurrent"] <= 1 and abs(t - cfg.episodes_length_s) < 1e-6
+    return s
+
+
 def generate_schedule(seed: int, cfg: ScheduleCfg, max_tries: int = 10000) -> Schedule:
-    """Rejection-sampled Poisson schedule. The deployment length is n_changes_target x mean gap (+ warm-up)."""
+    """Rejection-sampled Poisson schedule. The deployment length is n_changes_target x mean gap (+ warm-up).
+    With ``cfg.mode == "episodes"``: generate_episode_schedule (path B)."""
+    if getattr(cfg, "mode", "poisson") == "episodes":
+        return generate_episode_schedule(seed, cfg)
     rng = np.random.default_rng(seed)
     mean_gap = cfg.mean_gap_factor * cfg.t50_min * 60.0
     length = cfg.warmup_s + cfg.n_changes_target * mean_gap
@@ -153,6 +183,7 @@ class ScheduleApplier:
                 continue
             while self.next_idx[i] < len(s.events) and s.events[self.next_idx[i]].t_s <= t_s:
                 e = s.events[self.next_idx[i]]
+                due[e.factor] = [x for x in due[e.factor] if x[0] != i]  # several due at once (a resumed job): the last wins
                 due[e.factor].append((i, factor_value(e.factor, e.on, self.cfg, self.nominal_friction)))
                 applied.append((i, e))
                 self.next_idx[i] += 1

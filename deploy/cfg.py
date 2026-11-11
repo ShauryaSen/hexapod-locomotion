@@ -191,17 +191,31 @@ class ScheduleCfg:
     """At least one factor switches on twice (E1: 'so regimes recur'). Rejection sampled."""
     warmup_s: float = 60.0
     """Nominal time before the first change can arrive (detector baseline, T0 of the progress rate). ASSUMED."""
-    payload_kg: float = 2.5
-    """D3 test value."""
+    payload_kg: float = 6.0
+    """Test value (decided 11-03; RMA pilot 11-09: 31% drop)."""
     motor_strength: float = 0.5
-    """D2 test value (0.5 vs 0.6 to be chosen in the kill test)."""
-    friction: float = 0.175
-    """D1 test value: the middle of the 0.15-0.2 slippery patch. ASSUMED."""
+    """Test value (Shaurya's pilot rule, 11-10: 58% drop)."""
+    friction: float = 0.1
+    """Test value (decided 11-03; RMA pilot 11-09: 23% drop)."""
     factors: tuple[str, ...] = ("payload", "motor", "friction")
-    tune_seeds: tuple[int, ...] = tuple(range(0, 10))
-    """R2: schedules used for choosing each arm's knob."""
-    test_seeds: tuple[int, ...] = tuple(range(10, 20))
-    """R2: held-out schedules; hypotheses are tested on these with paired differences."""
+    tune_seeds: tuple[int, ...] = tuple(range(0, 6))
+    """R2 as amended 11-10: 6 tuning schedules, used for choosing each arm's / detector's knob."""
+    test_seeds: tuple[int, ...] = tuple(range(6, 16))
+    """R2 as amended 11-10: 10 held-out schedules."""
+    mode: str = "poisson"
+    """poisson = the E1 generator (overlaps allowed); episodes = path B (preregistration 6): non-overlapping
+    on/off episodes, ``episodes_per_factor`` of each test value in a seeded random order, fixed length."""
+    episodes_length_s: float = 600.0
+    """Path B deployment length [robot-s]."""
+    episodes_per_factor: int = 2
+    """Path B: on/off episodes per test value (2 = every regime recurs once)."""
+    episodes_warmup_s: float = 75.0
+    """Path B: nominal time before the first onset (the 150-cycle = 60-s per-deployment baseline + 15 s)."""
+    episodes_on_s: tuple[float, float] = (35.0, 55.0)
+    """Path B: each episode's on-duration ~ U[lo, hi] s."""
+    episodes_min_gap_s: float = 20.0
+    """Path B: every nominal gap (between episodes and after the last) >= this; the remaining nominal time is split
+    over the gaps by a flat Dirichlet."""
 
 
 @dataclass

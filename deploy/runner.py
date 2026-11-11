@@ -50,13 +50,18 @@ class DeploymentRunner:
             self.baseliner = Baseliner(self.n, nb, sd_g, mu_g, self.dev)
 
 
-    def run(self, minutes: float, progress_every_min: float = 1.0, on_minute=None, on_cycle=None) -> dict:
+    def run(self, minutes: float, progress_every_min: float = 1.0, on_minute=None, on_cycle=None, t0_s: float = 0.0) -> dict:
         """``on_minute(t_s)`` is called at every whole robot-minute (e.g. to save policy snapshots); if it returns True the
         run stops there. ``on_cycle(t_s)`` is called at the end of every gait cycle, likewise (finer stop points for
-        wall-time-limited jobs). The summary's ``minutes`` is the robot time actually run."""
+        wall-time-limited jobs). The summary's ``minutes`` is the robot time actually run. ``t0_s`` continues a chained
+        deployment: schedule time, logged t_s, the reposition phase and on_cycle's t start there (a multiple of the
+        gait cycle); events due at or before t0 are applied at the first step (path B chains, preregistration 6)."""
         env, cfg, upd, arm = self.env, self.cfg, self.updater, self.arm
         n, dev, dt = self.n, self.dev, self.dt
         total_steps = int(round(minutes * 60.0 / dt))
+        off = int(round(t0_s / dt))
+        if t0_s and off % self.steps_per_cycle:
+            raise ValueError(f"t0_s = {t0_s} is not a multiple of the gait cycle")
         obs = policy_obs(env)
         recover_left = torch.zeros(n, dtype=torch.long, device=dev)
         zeros = torch.zeros(n, device=dev)
@@ -67,11 +72,11 @@ class DeploymentRunner:
             upd.reset_to_pi0(state["reset"], self.pi0_critic)
         acc = self._new_acc()
         t_wall = time.time()
-        next_print = progress_every_min * 60.0
+        next_print = t0_s + progress_every_min * 60.0
         total_prog = torch.zeros(n, device=dev)
         total_falls = torch.zeros(n, device=dev)
         for step in range(total_steps):
-            t = step * dt
+            t = (off + step) * dt
             for i, e in self.applier.apply_due(t):
                 self.events.append({"env": i, "t_s": t, "factor": e.factor, "on": e.on})
             recovering = recover_left > 0
@@ -106,7 +111,7 @@ class DeploymentRunner:
                 recover_left = torch.where(new_fall, torch.full_like(recover_left, self.recovery_steps), recover_left)
                 pin_commands(env, cfg.cmd_speed)
                 obs_next = policy_obs(env)
-            if self.repo_steps and (step + 1) % self.repo_steps == 0:
+            if self.repo_steps and (off + step + 1) % self.repo_steps == 0:
                 upd.truncate(store_mask, self._peek(obs_next))
                 reset_in_place(env, self.ids, cfg.cmd_speed)
                 obs_next = policy_obs(env)
@@ -120,7 +125,7 @@ class DeploymentRunner:
             recover_left = (recover_left - 1).clamp_min(0)
             obs = obs_next
             if (step + 1) % self.steps_per_cycle == 0:
-                t_end = (step + 1) * dt
+                t_end = (off + step + 1) * dt
                 adapt, pending_alarm, pending_reset = self._end_cycle(t_end, acc, adapt, pending_alarm, pending_reset, self._peek(obs))
                 total_prog += acc["prog"]
                 total_falls += acc["falls"]
